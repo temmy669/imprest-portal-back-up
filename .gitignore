@@ -1,0 +1,33 @@
+# Ignore Python bytecode files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*__pycache__/
+C:\Users\USER\Documents\Projects\Aiico\call-over\call_over_backend\utils\mail_service\__pycache__
+
+# Virtual environment folders
+.env/
+.venv/
+env/
+venv/
+.virtualenv/
+.env
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Dependency directories
+pip-log.txt
+pip-delete-this-directory.txt
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.qodo
+
+*.png
+*.jpeg
+*.jpg
+*.pdf
