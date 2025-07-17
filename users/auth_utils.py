@@ -3,7 +3,7 @@ import base64
 import hashlib
 import os
 from django.contrib.auth import get_user_model
-from imprestPortal import settings
+from imprest_portal import settings
 from typing import Any, Dict
 
 User = get_user_model()
