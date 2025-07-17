@@ -5,7 +5,6 @@ from django.utils import timezone
 from datetime import timedelta
 from django.conf import settings
 
-
 class User(AbstractUser):
     microsoft_ad_id = models.CharField(
         max_length=255, 

@@ -6,92 +6,193 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import status
+from django.views import View
 from drf_spectacular.utils import extend_schema
-
+from users.auth_utils import (
+    create_or_update_user,
+    fetch_and_update_user_groups_and_roles,
+    generate_pkce_verifier,
+    fetch_token_data,
+)
+from django.shortcuts import redirect
+from django.utils.crypto import get_random_string
+from urllib.parse import urlencode
+from .models import OAuthState
+from rest_framework.exceptions import AuthenticationFailed, ValidationError, APIException
+from django.http import JsonResponse
 User = get_user_model()
 
 
 @extend_schema(
     summary="User Login with Azure AD",
-    description="Initiates login with Azure Active Directory by redirecting to the Microsoft login page."
+    description="Initiates login with Azure Active Directory by redirecting to the Microsoft login page.",
 )
 class AzureLoginView(APIView):
     authentication_classes = []  # Allow unauthenticated access
     permission_classes = []
 
     def get(self, request):
-        state = str(uuid.uuid4())
-        request.session['oauth_state'] = state
+        # Generate PKCE verifier and challenge
+        verifier, challenge = generate_pkce_verifier()
 
+        # Generate state and save to database
+        state = str(uuid.uuid4())
+        OAuthState.objects.create(
+            state=state,
+            pkce_verifier=verifier
+        )
+
+        # Clean up expired states
+        OAuthState.cleanup_expired()
+
+        # Generate Azure AD authorization URL with the updated scope
         authorization_url = (
             f"{settings.AZURE_AD_AUTHORITY}/oauth2/v2.0/authorize?"
             f"client_id={settings.AZURE_AD_CLIENT_ID}&response_type=code&"
             f"redirect_uri={settings.AZURE_AD_REDIRECT_URI}&"
-            f"scope=openid profile email User.Read&"
-            f"response_mode=query&state={state}"
+            f"scope=openid+profile+User.Read+email+RoleManagement.Read.All+Group.Read.All&"
+            f"code_challenge={challenge}&code_challenge_method=S256&"
+            f"state={state}"
         )
-        return Response({"auth_url": authorization_url}, status=status.HTTP_200_OK)
+
+        return Response({'authorization_url': authorization_url})
+
 
 
 @extend_schema(
     summary="Azure AD Callback",
     description="Handles the callback from Azure AD, exchanges the authorization code for tokens, and logs the user in."
-)
-class AzureCallbackView(APIView):
-    authentication_classes = []
-    permission_classes = []
+)  
+class AzureCallbackView(View):
 
     def get(self, request):
         code = request.GET.get('code')
         state = request.GET.get('state')
 
-        if state != request.session.get('oauth_state'):
-            return Response({'error': 'Invalid state'}, status=status.HTTP_400_BAD_REQUEST)
+        if not code:
+            raise ValidationError({'code': 'Authorization code not provided'})
 
-        token_url = f"{settings.AZURE_AD_AUTHORITY}/oauth2/v2.0/token"
-        token_data = {
-            'client_id': settings.AZURE_AD_CLIENT_ID,
-            'scope': 'openid profile email User.Read',
-            'code': code,
-            'redirect_uri': settings.AZURE_AD_REDIRECT_URI,
-            'grant_type': 'authorization_code',
-            'client_secret': settings.AZURE_AD_CLIENT_SECRET,
-        }
+        try:
+            # Retrieve and validate state
+            oauth_state = OAuthState.objects.get(state=state)
 
-        token_response = requests.post(token_url, data=token_data).json()
-        access_token = token_response.get('access_token')
+            # Validate if the state is the same
+            if oauth_state.state != state:
+                raise AuthenticationFailed('Invalid state parameter. Possible CSRF attack detected.')
 
-        if not access_token:
-            return Response({'error': 'Token fetch failed'}, status=status.HTTP_400_BAD_REQUEST)
+            # Get PKCE verifier
+            pkce_verifier = oauth_state.pkce_verifier
 
-        user_info = requests.get(
-            'https://graph.microsoft.com/v1.0/me',
-            headers={'Authorization': f'Bearer {access_token}'}
-        ).json()
+            
+            # Clean up the used state immediately
+            oauth_state.delete()
 
-        email = user_info.get('mail') or user_info.get('userPrincipalName')
-        name = user_info.get('displayName')
+            # Fetch token
+            token_data = fetch_token_data(code, pkce_verifier)
+            token_response = requests.post(token_data['url'], data=token_data['data']).json()
 
-        if not email:
-            return Response({'error': 'Email not found'}, status=status.HTTP_400_BAD_REQUEST)
+            access_token = token_response.get('access_token')
+            
 
-        user, _ = User.objects.get_or_create(email=email, defaults={'full_name': name})
+            if not access_token:
+                raise AuthenticationFailed('Authentication failed')
 
-        refresh = RefreshToken.for_user(user)
-        return Response({
-            'message': 'Login successful',
-            'access_token': str(refresh.access_token),
-            'refresh_token': str(refresh),
-        }, status=status.HTTP_200_OK)
+        
+            # Update user and branch
+            headers = {'Authorization': f'Bearer {access_token}'}
+            graph_data = requests.get('https://graph.microsoft.com/v1.0/me', headers=headers).json()
+            try:
+                user = create_or_update_user(graph_data)
+            except Exception as e:
+                
+                raise APIException("Error occurred while creating user!")
 
+            
+                # Fetch profile, groups, and roles
+            try:
+                group_role_data = fetch_and_update_user_groups_and_roles(headers, user)
+                
+                f"{group_role_data['group']}, with permissions {', '.join(str(perm) for perm in group_role_data['permissions'])}"
+            except Exception as e:
+                
+                raise APIException("Error occurred while fetching user groups and roles!")
 
+            
+
+            # Generate JWT tokens
+            refresh = RefreshToken.for_user(user)
+            access_token = str(refresh.access_token)
+            refresh_token = str(refresh)
+            # Create HTTP-only cookies for access and refresh tokens
+            response = JsonResponse({'message': 'Login successful'})
+            response.set_cookie(
+                key='access_token',
+                value=access_token,
+                httponly=True,
+                secure=True,
+                samesite='None',
+                max_age=3600
+            )
+            response.set_cookie(
+                key='refresh_token',
+                value=refresh_token,
+                httponly=True,
+                secure=True,
+                samesite='None',
+                max_age=7 * 24 * 3600
+            )
+
+            # Redirect to frontend
+            response['Location'] = settings.FRONTEND_URL + '/auth-success'
+            response.status_code = 302
+            return response
+
+        except OAuthState.DoesNotExist:
+            # For OAuth specific errors, we might want to keep the redirect behavior
+            frontend_error_url = f"{settings.FRONTEND_URL}/auth-error?error=invalid_state"
+            return redirect(frontend_error_url)
+        except (ValidationError, AuthenticationFailed, APIException) as e:
+            # Let these exceptions be handled by the custom exception handler
+            raise
+        except Exception as e:
+            frontend_error_url = f"{settings.FRONTEND_URL}/auth-error?error=auth_failed"
+            return redirect(frontend_error_url)
+        
+        
 @extend_schema(
     summary="Logout User",
     description="Logs out the current user by clearing authentication tokens."
 )
 class AzureLogoutView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
     def get(self, request):
-        response = Response({'message': 'Logged out'}, status=status.HTTP_200_OK)
-        response.delete_cookie('access_token')
-        response.delete_cookie('refresh_token')
-        return response
+        try:
+            # Clear cookies (if applicable)
+            response = Response(
+                {
+                    'message': 'Logout successful',
+                    'redirect_url': settings.FRONTEND_URL
+                },
+                status=status.HTTP_200_OK
+            )
+            response.delete_cookie('access_token')
+            response.delete_cookie('refresh_token')
+
+            # Optionally notify Azure (note: Azure AD logout is typically just a redirect)
+            azure_logout_url = settings.AZURE_AD_LOGOUT_URL
+            requests.get(azure_logout_url)
+
+            return response
+
+        except Exception as e:
+            frontend_error_url = f"{settings.FRONTEND_URL}/auth-error?error=logout_failed"
+            return Response(
+                {
+                    "detail": "Logout failed",
+                    "redirect_url": frontend_error_url,
+                    "more_detail": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
