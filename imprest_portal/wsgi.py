@@ -1,5 +1,5 @@
 """
-WSGI config for imprestPortal project.
+WSGI config for imprest_portal project.
 
 It exposes the WSGI callable as a module-level variable named ``application``.
 
@@ -11,6 +11,6 @@ import os
 
 from django.core.wsgi import get_wsgi_application
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'imprestPortal.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'imprest_portal.settings')
 
 application = get_wsgi_application()
