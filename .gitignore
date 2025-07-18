@@ -33,3 +33,30 @@ dmypy.json
 *.pdf
 
 .sqlite3
+
+# NEW
+*.log
+*.pot
+*.pyc
+__pycache__/
+local_settings.py
+
+# DRF
+*.pyo
+*.egg-info/
+dist/
+media/
+build/
+docs/_build/
+*.swp
+*.swo
+.vscode
+*/migrations/*
+!**/migrations/__init__.py
+*__pycache__/*
+todos.txt
+.env
+todo.txt
+media/
+*.zip
+.*DS_Store
