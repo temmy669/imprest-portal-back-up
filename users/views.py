@@ -68,6 +68,12 @@ class AzureCallbackView(View):
     def get(self, request):
         code = request.GET.get('code')
         state = request.GET.get('state')
+        error = request.GET.get('error')
+        
+        if error:
+            error_description = request.GET.get('error_description', 'No description provided.')
+            return JsonResponse({'error': error, 'description': error_description}, status=400)
+
 
         if not code:
             raise ValidationError({'code': 'Authorization code not provided'})

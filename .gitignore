@@ -31,3 +31,5 @@ dmypy.json
 *.jpeg
 *.jpg
 *.pdf
+
+.sqlite3
