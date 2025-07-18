@@ -50,7 +50,7 @@ class AzureLoginView(APIView):
             f"{settings.AZURE_AD_AUTHORITY}/oauth2/v2.0/authorize?"
             f"client_id={settings.AZURE_AD_CLIENT_ID}&response_type=code&"
             f"redirect_uri={settings.AZURE_AD_REDIRECT_URI}&"
-            f"scope=openid+profile+User.Read+email+RoleManagement.Read.All+Group.Read.All&"
+            f"scope=openid+profile+User.Read+email&"
             f"code_challenge={challenge}&code_challenge_method=S256&"
             f"state={state}"
         )
@@ -112,17 +112,6 @@ class AzureCallbackView(View):
             except Exception as e:
                 
                 raise APIException("Error occurred while creating user!")
-
-            
-                # Fetch profile, groups, and roles
-            try:
-                group_role_data = fetch_and_update_user_groups_and_roles(headers, user)
-                
-                f"{group_role_data['group']}, with permissions {', '.join(str(perm) for perm in group_role_data['permissions'])}"
-            except Exception as e:
-                
-                raise APIException("Error occurred while fetching user groups and roles!")
-
             
 
             # Generate JWT tokens

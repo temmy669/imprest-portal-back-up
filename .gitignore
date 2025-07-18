@@ -32,7 +32,7 @@ dmypy.json
 *.jpg
 *.pdf
 
-.sqlite3
+db.sqlite3
 
 # NEW
 *.log
