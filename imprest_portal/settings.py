@@ -86,8 +86,8 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 
-FRONTEND_URL = config('FRONTEND_URL', default='https://calloverfrontend.calloverapp.wajesmarthrms.website') 
-ZURE_AD_LOGOUT_URL = f"{AZURE_AD_AUTHORITY}/oauth2/v2.0/logout?post_logout_redirect_uri={FRONTEND_URL}"
+FRONTEND_URL = config('FRONTEND_URL', default='FRONTEND_URL') 
+AZURE_AD_LOGOUT_URL = f"{AZURE_AD_AUTHORITY}/oauth2/v2.0/logout?post_logout_redirect_uri={FRONTEND_URL}"
 
 
 # CORS settings based on environment
