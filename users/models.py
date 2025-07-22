@@ -3,6 +3,8 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 from datetime import timedelta
+from roles.models import Role
+from stores.models import Store
 
 class User(AbstractUser):
     microsoft_ad_id = models.CharField(
@@ -18,6 +20,33 @@ class User(AbstractUser):
         blank=True,
         help_text=_("The full name of the user.")
     )
+    
+    first_name = models.CharField(
+        max_length=30,
+        null=True,
+        blank=True,
+    )
+    
+    last_name = models.CharField(
+        max_length=30,
+        null=True,
+        blank=True,
+    )
+    
+    role = models.ForeignKey(
+        Role,
+        on_delete=models.SET_NULL,
+        null=True,
+    )
+
+    assigned_stores = models.ManyToManyField(
+        Store,
+        blank=True,
+        related_name='assigned_users'
+    )
+    
+    is_active = models.BooleanField(default=True)
+    
     data_updated_at = models.DateTimeField(
         null=True, 
         blank=True,
