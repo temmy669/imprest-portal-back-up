@@ -6,6 +6,7 @@ certifi==2025.7.14
 cffi==1.17.1
 charset-normalizer==3.4.2
 cryptography==45.0.5
+drf-spectacular==0.28.0
 Django==5.2.4
 djangorestframework==3.16.0
 djangorestframework_simplejwt==5.5.0
