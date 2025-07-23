@@ -117,15 +117,32 @@ TEMPLATES = [
 WSGI_APPLICATION = 'imprest_portal.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.' + DB_ENGINE,
+        'NAME': config('DB_NAME', default='imprest_dev'),
+        'USER': config('DB_USER', default='your_db_user'),
+        'PASSWORD': config('DB_PASSWORD', default='your_db_password'),
+        'HOST': config('DB_HOST', default='localhost'),
+        'PORT': config('DB_PORT', default='5432' if DB_ENGINE == 'postgresql' else '3306'),
+        'OPTIONS': {
+            'sslmode': 'require'
+        } if DB_ENGINE == 'postgresql' and USE_SSL else {},
     }
 }
+
+
+if ENVIRONMENT == 'production':
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.mssql',
+        'NAME': config('DB_NAME', default='prod_database'),
+        'USER': config('DB_USER', default='prod_user'),
+        'PASSWORD': config('DB_PASSWORD', default='prod_password'),
+        'HOST': config('DB_HOST', default='prod_server'),
+        'PORT': config('DB_PORT', default='1433'),
+        'OPTIONS': {'driver': 'ODBC Driver 17 for SQL Server'},
+    }
+
 
 
 # Password validation
