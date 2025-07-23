@@ -10,7 +10,6 @@ from django.views import View
 from drf_spectacular.utils import extend_schema
 from users.auth_utils import (
     create_or_update_user,
-    fetch_and_update_user_groups_and_roles,
     generate_pkce_verifier,
     fetch_token_data,
 )
@@ -20,6 +19,8 @@ from urllib.parse import urlencode
 from .models import OAuthState
 from rest_framework.exceptions import AuthenticationFailed, ValidationError, APIException
 from django.http import JsonResponse
+from .serializers import UserSerializer
+
 User = get_user_model()
 
 
@@ -118,6 +119,7 @@ class AzureCallbackView(View):
             refresh = RefreshToken.for_user(user)
             access_token = str(refresh.access_token)
             refresh_token = str(refresh)
+            print(f"Access Token: {access_token}")
             # Create HTTP-only cookies for access and refresh tokens
             response = JsonResponse({'message': 'Login successful'})
             response.set_cookie(
@@ -191,3 +193,39 @@ class AzureLogoutView(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+class UserView(APIView):
+    serializer_class = UserSerializer
+    """
+    API endpoint to list and add users in the system.
+    
+    Returns a list of all users with their details.
+    """
+    def get(self, request):
+        users = User.objects.all()
+        serializer = UserSerializer(users, many=True)
+        return Response({"users": serializer.data}, status=status.HTTP_200_OK)
+    
+    def put(self, request):
+        """
+        Updates an existing user in the system.
+        
+        Request Body Format:
+        {
+            "id": 1,
+            "email": """
+            
+        user_id = request.data.get('id')
+        if not user_id:
+            return Response({"error": "User ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = self.serializer_class(user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "User updated successfully"}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

@@ -16,6 +16,8 @@ def generate_pkce_verifier():
     ).rstrip(b'=').decode('utf-8')
     return verifier, challenge
 
+
+
 def create_or_update_user(graph_data):
     microsoft_ad_id = graph_data.get('id')
     email = graph_data.get('mail') or graph_data.get('userPrincipalName')
@@ -31,24 +33,6 @@ def create_or_update_user(graph_data):
     )
     return user
 
-def fetch_and_update_user_groups_and_roles(headers, user):
-    response = requests.get(
-        'https://graph.microsoft.com/v1.0/me/memberOf',
-        headers=headers
-    )
-
-    groups = []
-    if response.status_code == 200:
-        data = response.json()
-        groups = [entry.get("displayName") for entry in data.get("value", []) if "displayName" in entry]
-
-    # You can plug in your own logic to assign roles/permissions from groups
-    permissions = ['read', 'write']  # Simplified example
-
-    return {
-        'groups': groups,
-        'permissions': permissions,
-    }
 
 
 def fetch_token_data(code: str, verifier: str) -> Dict[str, Any]:

@@ -56,6 +56,8 @@ INSTALLED_APPS = [
 
     # Local apps
     'users.apps.usersConfig',
+    'roles.apps.RolesConfig',
+    'stores.apps.StoresConfig',
 ]
 
 AUTH_USER_MODEL = 'users.User'
@@ -119,6 +121,11 @@ WSGI_APPLICATION = 'imprest_portal.wsgi.application'
 DB_ENGINE = config('DB_ENGINE', default='postgresql')
 USE_SSL = config('DB_USE_SSL', default='False', cast=bool)
 
+# Database configuration
+
+DB_ENGINE = config('DB_ENGINE', default='postgresql')
+USE_SSL = config('DB_USE_SSL', default='False', cast=bool)
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.' + DB_ENGINE,
@@ -145,8 +152,7 @@ if ENVIRONMENT == 'production':
         'OPTIONS': {'driver': 'ODBC Driver 17 for SQL Server'},
     }
 
-
-
+    
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
