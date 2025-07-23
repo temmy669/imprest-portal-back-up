@@ -208,14 +208,24 @@ class UserView(APIView):
     
     def put(self, request):
         """
-        updates user details based on the provided data
-        """
+        Updates an existing user in the system.
+        
+        Request Body Format:
+        {
+            "id": 1,
+            "email": """
+            
         user_id = request.data.get('id')
         if not user_id:
-            return Response({"error": "User ID is required"})
-        
+            return Response({"error": "User ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
-            User.objects.filter(id=user_id).update(**request.data)
-            return Response({"message": "User updated successfully"}, status=status.HTTP_200_OK)
+            user = User.objects.get(id=user_id)
         except User.DoesNotExist:
-            return Response({"error": "User not Found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = self.serializer_class(user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "User updated successfully"}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
