@@ -118,9 +118,8 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'imprest_portal.wsgi.application'
 
-
-# Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+DB_ENGINE = config('DB_ENGINE', default='postgresql')
+USE_SSL = config('DB_USE_SSL', default='False', cast=bool)
 
 # Database configuration
 
@@ -130,7 +129,7 @@ USE_SSL = config('DB_USE_SSL', default='False', cast=bool)
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.' + DB_ENGINE,
-        'NAME': config('DB_NAME', default='callover_dev'),
+        'NAME': config('DB_NAME', default='imprest_dev'),
         'USER': config('DB_USER', default='your_db_user'),
         'PASSWORD': config('DB_PASSWORD', default='your_db_password'),
         'HOST': config('DB_HOST', default='localhost'),
@@ -153,6 +152,7 @@ if ENVIRONMENT == 'production':
         'OPTIONS': {'driver': 'ODBC Driver 17 for SQL Server'},
     }
 
+    
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
