@@ -116,6 +116,8 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'imprest_portal.wsgi.application'
 
+DB_ENGINE = config('DB_ENGINE', default='postgresql')
+USE_SSL = config('DB_USE_SSL', default='False', cast=bool)
 
 DATABASES = {
     'default': {
