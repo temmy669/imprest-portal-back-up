@@ -46,6 +46,7 @@ class User(AbstractUser):
     )
     
     is_active = models.BooleanField(default=True)
+   
     
     data_updated_at = models.DateTimeField(
         null=True, 

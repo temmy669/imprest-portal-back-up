@@ -23,6 +23,8 @@ from .serializers import UserSerializer
 
 User = get_user_model()
 
+from utils.permissions import permission_required
+from rest_framework.permissions import IsAuthenticated
 
 @extend_schema(
     summary="User Login with Azure AD",
@@ -193,9 +195,12 @@ class AzureLogoutView(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+            
+            
 
 class UserView(APIView):
     serializer_class = UserSerializer
+    # permission_classes = [IsAuthenticated]
     """
     API endpoint to list and add users in the system.
     
@@ -206,26 +211,14 @@ class UserView(APIView):
         serializer = UserSerializer(users, many=True)
         return Response({"users": serializer.data}, status=status.HTTP_200_OK)
     
-    def put(self, request):
+    @permission_required('add_user')
+    def post(self, request):
         """
-        Updates an existing user in the system.
-        
-        Request Body Format:
-        {
-            "id": 1,
-            "email": """
-            
-        user_id = request.data.get('id')
-        if not user_id:
-            return Response({"error": "User ID is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
-
-        serializer = self.serializer_class(user, data=request.data, partial=True)
+        Add a user to the system.
+         """
+         
+        serializer = UserSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response({"message": "User updated successfully"}, status=status.HTTP_200_OK)
+            return Response({"message": "User created successfully"}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

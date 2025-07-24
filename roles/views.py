@@ -1,5 +1,5 @@
 from django.shortcuts import render
-from .models import Role
+from .models import Role, Permission
 from rest_framework.views import APIView
 from .serializers import RoleSerializer, PermissionSerializer
 from rest_framework.response import Response
@@ -45,8 +45,10 @@ class PermissionListView(APIView):
     Currently not implemented.
     """
     def get(self, request):
-        return Response({"message": "Permission management not implemented yet."}, status=status.HTTP_501_NOT_IMPLEMENTED)
-    
+        permissions= Permission.objects.all()
+        serializer = PermissionSerializer(permissions, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+        
     def post(self, request):
        serializer = PermissionSerializer(data=request.data)
        if serializer.is_valid():
