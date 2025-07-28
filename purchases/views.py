@@ -8,13 +8,14 @@ from utils.permissions import *
 from users.auth import JWTAuthenticationFromCookie
 from drf_spectacular.utils import extend_schema
 from rest_framework.permissions import IsAuthenticated
+from helpers.response import CustomResponse
 
 class PurchaseRequestView(APIView):
     """
     Handles listing and creating purchase requests
     """
     serializer_class = PurchaseRequestSerializer
-    # authentication_classes = [JWTAuthenticationFromCookie]
+    authentication_classes = [JWTAuthenticationFromCookie]
     permission_classes = [IsAuthenticated, SubmitPurchaseRequest]
 
     def get(self, request):
@@ -33,7 +34,7 @@ class PurchaseRequestView(APIView):
             
 
         serializer = PurchaseRequestSerializer(queryset, many=True)
-        return Response(serializer.data)
+        return CustomResponse(True, "Purchase Requests Returned Successfully", data = serializer.data)
 
     def post(self, request):
         """
@@ -49,10 +50,7 @@ class PurchaseRequestView(APIView):
 
             # Check ₦5,000 threshold
             if total_amount < 5000:
-                return Response(
-                    {"error": "Purchase requests required only for amounts ≥ ₦5,000"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                return CustomResponse( True, "Purchase requests required only for amounts ≥ ₦5,000")
 
             # Save the request
             purchase_request = serializer.save(
@@ -71,8 +69,8 @@ class PurchaseRequestView(APIView):
                     total_price=item_data['unit_price'] * item_data['quantity']
                 )
 
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return CustomResponse(True, "Purchase Request Created Successfully", 201, serializer.data)
+        return CustomResponse(True, serializer.errors)
     
     def put(self, request, pk):
         """
