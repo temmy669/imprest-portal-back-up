@@ -55,10 +55,11 @@ INSTALLED_APPS = [
     'rest_framework',
 
     # Local apps
-    'users.apps.usersConfig',
+    'users.apps.UsersConfig',
     'roles.apps.RolesConfig',
     'stores.apps.StoresConfig',
     'purchases.apps.PurchasesConfig',
+    'helpers.apps.HelpersConfig',
 ]
 
 AUTH_USER_MODEL = 'users.User'
@@ -214,7 +215,7 @@ REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': (
         'rest_framework.renderers.JSONRenderer',  # Enforce JSON-only responses
     ),
-    
+    'EXCEPTION_HANDLER': 'helpers.error_handler.custom_exception_handler',
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
