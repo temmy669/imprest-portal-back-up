@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import User
 from stores.models import Store
-from roles.serializers import RoleSerializer
+from roles.models import Role
 from stores.serializers import StoreSerializer
 
 class UserSerializer(serializers.ModelSerializer):
