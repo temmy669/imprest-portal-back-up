@@ -23,15 +23,36 @@ def create_or_update_user(graph_data):
     email = graph_data.get('mail') or graph_data.get('userPrincipalName')
     name = graph_data.get('displayName')
 
-    user, _ = User.objects.update_or_create(
+    # First, try to find user by microsoft_ad_id
+    user = User.objects.filter(microsoft_ad_id=microsoft_ad_id).first()
+
+    if user:
+        # Update existing user
+        user.email = email
+        user.username = email
+        user.name = name
+        user.save()
+        return user
+
+    # If not found, check by email (in case user was created manually)
+    user = User.objects.filter(email=email).first()
+    if user:
+        # Link AD ID to existing user
+        user.microsoft_ad_id = microsoft_ad_id
+        user.name = name
+        user.username = email
+        user.save()
+        return user
+
+    # Otherwise, create a new user
+    user = User.objects.create(
         microsoft_ad_id=microsoft_ad_id,
-        defaults={
-            'email': email,
-            'username': email,
-            'name': name,
-        }
+        email=email,
+        username=email,
+        name=name
     )
     return user
+
 
 
 

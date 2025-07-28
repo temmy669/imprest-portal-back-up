@@ -1,41 +1,85 @@
-from django.core.exceptions import PermissionDenied
+from rest_framework.permissions import BasePermission
+from purchases.models import PurchaseRequest
 
-def check_permission(user, codename=None, amount=None):
+class BaseRolePermission(BasePermission):
     """
-    Universal permission checker with:
-    - Admin override (if user.is_superuser or role.is_admin_role)
-    - Codename-based permission checks
-    - Amount-based approval thresholds (for purchases)
+    Base permission class that all other permissions will inherit from
     """
-    # Admin/Superuser bypass
-    if getattr(user, 'is_superuser', False) or user.role.name =='Admin':
-        return True
-    
-    # Standard permission check
-    if codename:
-        return user.role.permissions.filter(codename=codename).exists()
-    
-    # Amount-based approval logic (for purchase requests)
-    if amount is not None:
-        if amount >= 5000:
-            return user.role.permissions.filter(codename='approve_over_5000').exists()
-    return False
+    codename = None
+    amount_threshold = None
+    object_permission = False
 
-def permission_required(codename=None, amount_threshold=None):
-    """
-    Enhanced decorator supporting:
-    - @permission_required('add_user')  # Codename check
-    - @permission_required(amount_threshold=5000)  # Amount check
-    """
-    def decorator(view_func):
-        def wrapper(request, *args, **kwargs):
-            has_perm = check_permission(
-                request.user, 
-                codename=codename,
-                amount=amount_threshold
-            )
-            if not has_perm:
-                raise PermissionDenied("Missing required permission")
-            return view_func(request, *args, **kwargs)
-        return wrapper
-    return decorator
+    def has_permission(self, request, view):
+        user = request.user
+
+        # Admins and Superusers always allowed
+        if getattr(user, 'is_superuser', False) or getattr(user.role, 'name', None) == 'Admin':
+            return True
+
+        # Amount-based logic (if defined)
+        if self.amount_threshold is not None:
+            amount = self.get_amount_from_request(request, view)
+            if amount is None:
+                return False
+
+            if amount >= self.amount_threshold:
+                return user.role.permissions.filter(codename='approve_over_5000').exists()
+            return True
+
+        # Codename-based check
+        if self.codename:
+            return user.role.permissions.filter(codename=self.codename).exists()
+
+        return False
+
+    def get_amount_from_request(self, request, view):
+        try:
+            return float(request.data.get('amount'))
+        except (ValueError, TypeError):
+            return None
+    
+    def has_object_permission(self, request, view, obj):
+        if not self.object_permission:
+            return True
+
+        user = request.user
+
+        # Admins/superusers bypass
+        if getattr(user, 'is_superuser', False) or getattr(user.role, 'name', None) == 'Admin':
+            return True
+
+        if isinstance(obj, PurchaseRequest):
+            if self.codename == 'change_purchase_request':
+                return obj.requester == user
+            elif self.codename in ['approve_purchase_request', 'decline_purchase_request']:
+                return (
+                    getattr(user.role, 'name', '') == 'Area Manager' and 
+                    obj.store in user.assigned_stores.all()
+                )
+
+        return False
+
+# Specific permission classes for each use case
+class SubmitPurchaseRequest(BaseRolePermission):
+    codename = 'submit_purchase_request'
+
+class ChangePurchaseRequest(BaseRolePermission):
+    codename = 'change_purchase_request'
+    object_permission = True
+
+class ApprovePurchaseRequest(BaseRolePermission):
+    codename = 'approve_purchase_request'
+    object_permission = True
+
+class DeclinePurchaseRequest(BaseRolePermission):
+    codename = 'decline_purchase_request'
+    object_permission = True
+
+class ManageUsers(BaseRolePermission):
+    codename = 'manage_users'
+
+class ApproveOver5000(BaseRolePermission):
+    amount_threshold = 5000
+
+class ViewAnalytics(BaseRolePermission):
+    codename = 'view_analytics'

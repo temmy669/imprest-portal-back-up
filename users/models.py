@@ -33,11 +33,26 @@ class User(AbstractUser):
         blank=True,
     )
     
+    phone_number = models.CharField(
+        max_length=15,
+        null=True,
+        blank=True,
+    )
+    
     role = models.ForeignKey(
         Role,
         on_delete=models.SET_NULL,
         null=True,
     )
+    
+    # For roles like Restaurant Manager, etc.
+    store = models.ForeignKey(
+        Store, 
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True, 
+        related_name='user_store')
+
 
     assigned_stores = models.ManyToManyField(
         Store,
@@ -82,3 +97,5 @@ class OAuthState(models.Model):
         """Clean up expired state entries"""
         expiration_time = timezone.now() - timedelta(minutes=max_age_minutes)
         cls.objects.filter(created_at__lt=expiration_time).delete()
+
+
