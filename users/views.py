@@ -3,6 +3,7 @@ import requests
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from helpers.exceptions import CustomValidationException
+from helpers.response import CustomResponse
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -244,3 +245,47 @@ class UserView(APIView):
             serializer.save()
             return Response({"message": "User updated successfully"}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+
+class DummyLogin(APIView):
+    """
+    Dummy login view for testing purposes.
+    """
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        email = request.GET.get('email')
+        if not email:
+            return CustomResponse(False,  "Email parameter is required")
+        
+        user = User.objects.filter(email=email).first()
+        # Generate JWT tokens
+        refresh = RefreshToken.for_user(user)
+        access_token = str(refresh.access_token)
+        refresh_token = str(refresh)
+        print(f"Access Token: {access_token}")
+        # Create HTTP-only cookies for access and refresh tokens
+        response = CustomResponse(True,  'Login successful')
+        response.set_cookie(
+            key='access_token',
+            value=access_token,
+            httponly=True,
+            secure=True,
+            samesite='None',
+            max_age=3600
+        )
+        response.set_cookie(
+            key='refresh_token',
+            value=refresh_token,
+            httponly=True,
+            secure=True,
+            samesite='None',
+            max_age=7 * 24 * 3600
+        )
+
+        # Redirect to frontend
+        response['Location'] = settings.FRONTEND_URL + '/auth-success'
+        response.status_code = 302
+        return response
