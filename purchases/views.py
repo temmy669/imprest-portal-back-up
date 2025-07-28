@@ -89,7 +89,7 @@ class PurchaseRequestView(APIView):
     
     
 class ApprovePurchaseRequestView(APIView):
-    # authentication_classes = [JWTAuthenticationFromCookie]
+    authentication_classes = [JWTAuthenticationFromCookie]
     permission_classes = [IsAuthenticated, ApprovePurchaseRequest]
 
     @extend_schema(
