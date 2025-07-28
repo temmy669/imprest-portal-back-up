@@ -2,6 +2,8 @@ import uuid
 import requests
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from helpers.exceptions import CustomValidationException
+from helpers.response import CustomResponse
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -80,7 +82,7 @@ class AzureCallbackView(View):
 
 
         if not code:
-            raise ValidationError({'code': 'Authorization code not provided'})
+            raise CustomValidationException('Authorization code not provided', 401)
 
         try:
             # Retrieve and validate state
@@ -88,7 +90,7 @@ class AzureCallbackView(View):
 
             # Validate if the state is the same
             if oauth_state.state != state:
-                raise AuthenticationFailed('Invalid state parameter. Possible CSRF attack detected.')
+                raise CustomValidationException('Invalid state parameter. Possible CSRF attack detected.', 401)
 
             # Get PKCE verifier
             pkce_verifier = oauth_state.pkce_verifier
@@ -105,7 +107,7 @@ class AzureCallbackView(View):
             
 
             if not access_token:
-                raise AuthenticationFailed('Authentication failed')
+                raise CustomValidationException('Authentication failed', 401)
 
         
             # Update user and branch
@@ -115,7 +117,7 @@ class AzureCallbackView(View):
                 user = create_or_update_user(graph_data)
             except Exception as e:
                 
-                raise APIException("Error occurred while creating user!")
+                raise CustomValidationException("Error occurred while creating user!", 401)
             
 
             # Generate JWT tokens
