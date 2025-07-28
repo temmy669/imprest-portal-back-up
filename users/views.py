@@ -23,8 +23,9 @@ from .serializers import UserSerializer
 
 User = get_user_model()
 
-from utils.permissions import permission_required
+from utils.permissions import *
 from rest_framework.permissions import IsAuthenticated
+from .auth import JWTAuthenticationFromCookie
 
 @extend_schema(
     summary="User Login with Azure AD",
@@ -200,7 +201,8 @@ class AzureLogoutView(APIView):
 
 class UserView(APIView):
     serializer_class = UserSerializer
-    # permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, ManageUsers]
+    authentication_classes = [JWTAuthenticationFromCookie]
     """
     API endpoint to list and add users in the system.
     
@@ -211,7 +213,7 @@ class UserView(APIView):
         serializer = UserSerializer(users, many=True)
         return Response({"users": serializer.data}, status=status.HTTP_200_OK)
     
-    @permission_required('add_user')
+   
     def post(self, request):
         """
         Add a user to the system.
@@ -223,16 +225,21 @@ class UserView(APIView):
             return Response({"message": "User created successfully"}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    def put(self, request, user_id):
+    def put(self, request):
         """
         Update an existing user.
         """
+        user_id = request.data.get('id')
+        if not user_id:
+            return Response({"error": "User ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             user = User.objects.get(id=user_id)
-            serializer = UserSerializer(user, data=request.data, partial=True)
-            if serializer.is_valid():
-                serializer.save()
-                return Response({"message": "User updated successfully"}, status=status.HTTP_200_OK)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except User.DoesNotExist:
             return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = UserSerializer(user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "User updated successfully"}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

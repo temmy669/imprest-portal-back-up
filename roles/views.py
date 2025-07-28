@@ -55,3 +55,11 @@ class PermissionListView(APIView):
            serializer.save()
            return Response(serializer.data, status=status.HTTP_201_CREATED)
        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+   
+    def put(self, request):
+        # Update permission
+        permission_id = request.data.get('id')
+        
+        Permission.objects.filter(id=permission_id).update(**request.data)
+        return Response({"message": "Permission updated successfully"}, status=status.HTTP_200_OK)
+    

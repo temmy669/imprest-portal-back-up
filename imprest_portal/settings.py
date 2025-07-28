@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     'users.apps.usersConfig',
     'roles.apps.RolesConfig',
     'stores.apps.StoresConfig',
+    'purchases.apps.PurchasesConfig',
 ]
 
 AUTH_USER_MODEL = 'users.User'
@@ -220,6 +221,16 @@ REST_FRAMEWORK = {
     
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
+
+#Email settings
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 465
+EMAIL_USE_TLS = False
+EMAIL_USE_SSL = True
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='your_host_user')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='your_app_password')# Use an App Password, not your real password
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL')
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'IMPREST PORTAL API DOCUMENTATION',
