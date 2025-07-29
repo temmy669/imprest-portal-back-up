@@ -66,10 +66,10 @@ class AzureLoginView(APIView):
 
 
 
-@extend_schema(
-    summary="Azure AD Callback",
-    description="Handles the callback from Azure AD, exchanges the authorization code for tokens, and logs the user in."
-)  
+# @extend_schema(
+#     summary="Azure AD Callback",
+#     description="Handles the callback from Azure AD, exchanges the authorization code for tokens, and logs the user in."
+# )  
 class AzureCallbackView(View):
 
     def get(self, request):
