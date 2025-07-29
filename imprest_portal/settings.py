@@ -218,7 +218,9 @@ SIMPLE_JWT = {
 #REST_FRAMEWORK SETTINGS
 REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': (
-        'rest_framework.renderers.JSONRenderer',  # Enforce JSON-only responses
+        'rest_framework.renderers.JSONRenderer',  
+         'rest_framework.renderers.BrowsableAPIRenderer'
+        
     ),
     'EXCEPTION_HANDLER': 'helpers.error_handler.custom_exception_handler',
     'DEFAULT_AUTHENTICATION_CLASSES': (
