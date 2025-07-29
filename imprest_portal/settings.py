@@ -125,6 +125,19 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'imprest_portal.wsgi.application'
 
+# Session timeout and persistence
+SESSION_COOKIE_AGE = 3600  # 1 hour in seconds
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # Keep session alive even after browser is closed
+ 
+# Secure session cookies
+SESSION_COOKIE_SECURE = ENVIRONMENT == 'production'
+SESSION_COOKIE_SAMESITE = 'None'
+ 
+SESSION_COOKIE_HTTPONLY = True  # Prevents client-side scripts from accessing cookies
+ 
+# Optional: Clear expired sessions
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+
 DB_ENGINE = config('DB_ENGINE', default='postgresql')
 USE_SSL = config('DB_USE_SSL', default='False', cast=bool)
 

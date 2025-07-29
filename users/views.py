@@ -66,10 +66,10 @@ class AzureLoginView(APIView):
 
 
 
-@extend_schema(
-    summary="Azure AD Callback",
-    description="Handles the callback from Azure AD, exchanges the authorization code for tokens, and logs the user in."
-)  
+# @extend_schema(
+#     summary="Azure AD Callback",
+#     description="Handles the callback from Azure AD, exchanges the authorization code for tokens, and logs the user in."
+# )  
 class AzureCallbackView(View):
 
     def get(self, request):
@@ -147,7 +147,7 @@ class AzureCallbackView(View):
 
            # Prepare redirect URL with token query
             query_params = urlencode({'token': access_token})
-            redirect_url = f"{settings.FRONTEND_URL}/auth-success"
+            redirect_url = settings.FRONTEND_URL + '/auth-success'
 
             # Create redirect response
             response = JsonResponse({'message': 'Login successful'})
