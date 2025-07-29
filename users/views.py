@@ -29,6 +29,8 @@ User = get_user_model()
 from utils.permissions import *
 from rest_framework.permissions import IsAuthenticated
 from .auth import JWTAuthenticationFromCookie
+from django.http import HttpResponseRedirect
+ 
 
 @extend_schema(
     summary="User Login with Azure AD",
@@ -127,7 +129,7 @@ class AzureCallbackView(View):
             refresh_token = str(refresh)
             print(f"Access Token: {access_token}")
             # Create HTTP-only cookies for access and refresh tokens
-            response = JsonResponse({'message': 'Login successful'})
+            response = HttpResponseRedirect(settings.FRONTEND_URL + '/auth-success')
             response.set_cookie(
                 key='access_token',
                 value=access_token,
@@ -144,35 +146,13 @@ class AzureCallbackView(View):
                 samesite='None',
                 max_age=7 * 24 * 3600
             )
-
-           # Prepare redirect URL with token query
-            query_params = urlencode({'token': access_token})
-            redirect_url = settings.FRONTEND_URL + '/auth-success'
-
-            # Create redirect response
-            response = JsonResponse({'message': 'Login successful'})
-            response['Location'] = redirect_url
-            response.status_code = 302
-            
-            response.set_cookie(
-                key='access_token',
-                value=access_token,
-                httponly=True,
-                secure=True,
-                samesite='None',
-                max_age=3600
-            )
-            response.set_cookie(
-                key='refresh_token',
-                value=refresh_token,
-                httponly=True,
-                secure=True,
-                samesite='None',
-                max_age=7 * 24 * 3600
-            )
-
-            
             return response
+        
+            # Create redirect response
+            # response = JsonResponse({'message': 'Login successful'})
+            # response['Location'] = settings.FRONTEND_URL + '/auth-success'
+            # response.status_code = 302
+            # return redirect(redirect_url)
 
         except OAuthState.DoesNotExist:
             # For OAuth specific errors, we might want to keep the redirect behavior
