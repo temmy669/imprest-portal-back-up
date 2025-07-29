@@ -147,7 +147,7 @@ class AzureCallbackView(View):
 
            # Prepare redirect URL with token query
             query_params = urlencode({'token': access_token})
-            redirect_url = f"{settings.FRONTEND_URL}/auth-success"
+            redirect_url = settings.FRONTEND_URL + '/auth-success'
 
             # Create redirect response
             response = JsonResponse({'message': 'Login successful'})
