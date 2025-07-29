@@ -20,10 +20,12 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['first_name', 'last_name', 'email', 'role', 'assigned_stores', 'store']
+        read_only_fields = ['id', 'date_added']
 
     def to_representation(self, instance):
         rep = super().to_representation(instance)
         rep['role'] = instance.role.name if instance.role else None
+        rep['date_added'] = instance.data_updated_at.strftime('%d-%m-%Y')
 
         if instance.role and instance.role.name == 'Area Manager':
             rep['assigned_stores'] = StoreSerializer(instance.assigned_stores.all(), many=True).data

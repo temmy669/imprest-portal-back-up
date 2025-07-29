@@ -22,6 +22,7 @@ from .models import OAuthState
 from rest_framework.exceptions import AuthenticationFailed, ValidationError, APIException
 from django.http import JsonResponse
 from .serializers import UserSerializer
+from urllib.parse import urlencode
 
 User = get_user_model()
 
@@ -144,9 +145,33 @@ class AzureCallbackView(View):
                 max_age=7 * 24 * 3600
             )
 
-            # Redirect to frontend
-            response['Location'] = settings.FRONTEND_URL + '/auth-success'
+           # Prepare redirect URL with token query
+            query_params = urlencode({'token': access_token})
+            redirect_url = f"{settings.FRONTEND_URL}/auth-success?{query_params}"
+
+            # Create redirect response
+            response = JsonResponse({'message': 'Login successful'})
+            response['Location'] = redirect_url
             response.status_code = 302
+            
+            response.set_cookie(
+                key='access_token',
+                value=access_token,
+                httponly=True,
+                secure=True,
+                samesite='None',
+                max_age=3600
+            )
+            response.set_cookie(
+                key='refresh_token',
+                value=refresh_token,
+                httponly=True,
+                secure=True,
+                samesite='None',
+                max_age=7 * 24 * 3600
+            )
+
+            
             return response
 
         except OAuthState.DoesNotExist:
@@ -200,6 +225,16 @@ class AzureLogoutView(APIView):
             )
             
             
+#Get authenticated user details
+@extend_schema(
+    summary="Get Authenticated User Details"
+)
+class MeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data)         
 
 class UserView(APIView):
     serializer_class = UserSerializer
