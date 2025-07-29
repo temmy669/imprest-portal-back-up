@@ -98,14 +98,14 @@ AZURE_AD_LOGOUT_URL = f"{AZURE_AD_AUTHORITY}/oauth2/v2.0/logout?post_logout_redi
 
 # CORS settings based on environment
 # if DEBUG:
-CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOW_CREDENTIALS = False
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_CREDENTIALS = True
 # else:
 CORS_ALLOWED_ORIGINS = [
 
          "http://localhost:5173",
          "http://localhost:3000",
-         "https://calloverapp.wajesmarthrms.website",
+         "http://foodconcept-imprest-portal.wajesmarthrms.website",
 
     ]
 
