@@ -99,7 +99,7 @@ AZURE_AD_LOGOUT_URL = f"{AZURE_AD_AUTHORITY}/oauth2/v2.0/logout?post_logout_redi
 # CORS settings based on environment
 # if DEBUG:
 CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_CREDENTIALS = False
 # else:
 CORS_ALLOWED_ORIGINS = [
 
