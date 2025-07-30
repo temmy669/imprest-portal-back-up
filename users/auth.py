@@ -6,8 +6,15 @@ from rest_framework.exceptions import AuthenticationFailed
 class JWTAuthenticationFromCookie(JWTAuthentication):
     def authenticate(self, request: Request):
         raw_token = request.COOKIES.get('access_token')
+       
         if not raw_token:
-            return None
+            # Try header authentication
+            print("Authenticating with Bearer token")
+            header_auth = super().authenticate(request)
+            if header_auth is not None:
+                return header_auth
+            raise AuthenticationFailed('Authentication token is missing.')
+           
         try:
             validated_token = self.get_validated_token(raw_token)
             return self.get_user(validated_token), validated_token

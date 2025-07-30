@@ -211,6 +211,7 @@ class AzureLogoutView(APIView):
 )
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthenticationFromCookie]
     def get(self, request):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)         
