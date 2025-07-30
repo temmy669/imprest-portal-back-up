@@ -4,6 +4,7 @@ from rest_framework import status
 from .models import Region, Store
 from .serializers import RegionSerializer, StoreSerializer, StoreRegionSerializer
 from django.contrib.auth import get_user_model
+from helpers.response import CustomResponse
 
 User = get_user_model()
 
@@ -34,14 +35,14 @@ class StoreListView(APIView):
         """
         stores = Store.objects.all()
         serializer = StoreSerializer(stores, many=True)
-        return Response(serializer.data)
+        return CustomResponse(True, "Stores returned Successfully", data=serializer.data)
     
     def post(self, request):
         """Creates a new store"""
         serializer = StoreSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return CustomResponse(True, "User added", data=serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -69,14 +70,14 @@ class RegionListView(APIView):
         """
         regions = Region.objects.all()
         serializer = RegionSerializer(regions, many=True)
-        return Response(serializer.data)
+        return CustomResponse(True, "Regions returned Successfully", data=serializer.data)
     
     def post(self, request):
         """Creates a new region"""
         serializer = RegionSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return CustomResponse(True, "Region Added", data=serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -110,7 +111,7 @@ class StoreByRegionView(APIView):
         # Only return active stores belonging to the specified region
         stores = Store.objects.filter(region_id=region_id, is_active=True)
         serializer = StoreRegionSerializer(stores, many=True)
-        return Response(serializer.data)
+        return CustomResponse(True, "Store returned accoring to selected region", data=serializer.data)
 
 
 class AssignStoresToUserView(APIView):
