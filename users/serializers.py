@@ -1,12 +1,10 @@
 from rest_framework import serializers
 from .models import User
-from stores.models import Store
+from stores.models import Store, Region
 from roles.models import Role
-from stores.serializers import StoreSerializer
+from stores.serializers import StoreSerializer, RegionSerializer
 
 class UserSerializer(serializers.ModelSerializer):
-   
-
     assigned_stores = serializers.PrimaryKeyRelatedField(
         many=True,
         queryset=Store.objects.all(),
@@ -16,29 +14,40 @@ class UserSerializer(serializers.ModelSerializer):
         queryset=Store.objects.all(),
         required=False
     )
+    region = serializers.PrimaryKeyRelatedField(
+        queryset=Region.objects.all(),
+        required=False,
+        allow_null=True
+    )
 
     class Meta:
         model = User
-        fields = ['id', 'first_name', 'last_name', 'email', 'role', 'assigned_stores', 'store']
+        fields = ['id', 'first_name', 'last_name', 'email', 'role', 'assigned_stores', 'store', 'region']
         read_only_fields = ['id', 'date_added']
 
     def to_representation(self, instance):
         rep = super().to_representation(instance)
         rep['role'] = instance.role.name if instance.role else None
-        rep['date_added'] = instance.data_updated_at.strftime('%d-%m-%Y')
+        rep['date_added'] = instance.created_at.strftime('%d-%m-%Y')
+
+        if instance.region:
+            rep['region'] = RegionSerializer(instance.region).data
+        else:
+            rep['region'] = None
 
         if instance.role and instance.role.name == 'Area Manager':
             rep['assigned_stores'] = StoreSerializer(instance.assigned_stores.all(), many=True).data
-            rep.pop('store', None)  # remove store field for area manager
+            rep.pop('store', None)
         else:
             rep['store'] = StoreSerializer(instance.store).data if instance.store else None
-            rep.pop('assigned_stores', None)  # remove assigned_stores field for non-area-manager roles
+            rep.pop('assigned_stores', None)
 
         return rep
 
     def create(self, validated_data):
         # Extract nested role data if needed
         role_data = validated_data.get('role')
+        region = validated_data.pop('region', None)
 
         # If role is a dictionary (nested), get the ID
         if isinstance(role_data, dict):
@@ -61,6 +70,7 @@ class UserSerializer(serializers.ModelSerializer):
             user = User(**validated_data)
 
         user.role = role
+        user.region = region
 
         if role and role.name == 'Admin':
             user.is_superuser = True
@@ -86,6 +96,7 @@ class UserSerializer(serializers.ModelSerializer):
         instance.last_name = validated_data.get('last_name', instance.last_name)
         instance.email = validated_data.get('email', instance.email)
         instance.role = validated_data.get('role', instance.role)
+        instance.region = validated_data.get('region', instance.region)
 
         if 'assigned_stores' in validated_data and instance.role.name == 'Area Manager':
             instance.assigned_stores.set(validated_data['assigned_stores'])
