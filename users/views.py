@@ -134,7 +134,7 @@ class AzureCallbackView(View):
                 key='access_token',
                 value=access_token,
                 httponly=True,
-                secure=True,
+                secure=False,
                 samesite='None',
                 max_age=3600
             )
@@ -142,7 +142,7 @@ class AzureCallbackView(View):
                 key='refresh_token',
                 value=refresh_token,
                 httponly=True,
-                secure=True,
+                secure=False,
                 samesite='None',
                 max_age=7 * 24 * 3600
             )
@@ -211,7 +211,6 @@ class AzureLogoutView(APIView):
 )
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
-
     def get(self, request):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)         
