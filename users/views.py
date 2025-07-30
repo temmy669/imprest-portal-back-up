@@ -228,7 +228,7 @@ class UserView(APIView):
     def get(self, request):
         users = User.objects.all()
         serializer = UserSerializer(users, many=True)
-        return Response({"users": serializer.data}, status=status.HTTP_200_OK)
+        return CustomResponse(True, "Users retrieved successfully", data=serializer.data)
     
    
     def post(self, request):
