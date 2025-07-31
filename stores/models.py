@@ -4,6 +4,13 @@ from django.db import models
 
 class Region(models.Model):
     name = models.CharField(max_length=100, unique=True)
+    area_manager = models.ForeignKey(
+        'users.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='managed_regions'
+    )
 
 
     def __str__(self):
@@ -13,12 +20,12 @@ class Store(models.Model):
     name = models.CharField(max_length=100)
     code = models.CharField(max_length=20, unique=True)
     region = models.ForeignKey(Region, on_delete=models.PROTECT, related_name='region_stores')
-    area_manager = models.ForeignKey(
+    restaurant_manager = models.ForeignKey(
     'users.User',
     on_delete=models.SET_NULL,
     null=True,
     blank=True,
-    related_name='managed_stores'  # no clash with assigned_stores
+    related_name='managed_store'  # no clash with assigned_stores
 )
     is_active = models.BooleanField(default=True)
 
