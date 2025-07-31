@@ -51,7 +51,7 @@ class BaseRolePermission(BasePermission):
         if isinstance(obj, PurchaseRequest):
             if self.codename == 'change_purchase_request':
                 return obj.requester == user
-            elif self.codename in ['approve_purchase_request', 'decline_purchase_request', 'view_purchase_request']:
+            elif self.codename in ['can_approve_request', 'view_purchase_request']:
                 return (
                     getattr(user.role, 'name', '') == 'Area Manager' and 
                     obj.store in user.assigned_stores.all()
@@ -72,7 +72,7 @@ class ChangePurchaseRequest(BaseRolePermission):
     object_permission = True
 
 class ApprovePurchaseRequest(BaseRolePermission):
-    codename = 'approve_purchase_request'
+    codename = 'can_approve_request'
     object_permission = True
 
 class DeclinePurchaseRequest(BaseRolePermission):
