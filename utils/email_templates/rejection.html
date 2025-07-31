@@ -15,7 +15,7 @@
         }
 
         .header {
-            color: #2e6da4;
+            color: #d9534f;
             border-bottom: 1px solid #eee;
             padding-bottom: 10px;
         }
@@ -24,6 +24,13 @@
             margin-top: 20px;
             font-size: 0.9em;
             color: #777;
+        }
+
+        .reason-box {
+            background: #f9f9f9;
+            padding: 15px;
+            border-left: 4px solid #d9534f;
+            margin: 15px 0;
         }
 
         table {
@@ -48,46 +55,21 @@
 <body>
     <div class="container">
         <div class="header">
-            <h2>Purchase Request Approved</h2>
+            <h2>Purchase Request Declined</h2>
         </div>
 
         <p>Dear {{ requester_name }},</p>
 
-        <p>Your purchase request <strong>{{request_id}}</strong> has been approved.</p>
+        <p>Your purchase request <strong>{{ voucher_id }}</strong> for the following items has been declined:</p>
 
-        <h3>Request Details:</h3>
-        <table>
-            <tr>
-                <th>Store</th>
-                <td>{{ store_name }} ({{ store_code }})</td>
-            </tr>
-            <tr>
-                <th>Total Amount</th>
-                <td>{{ total_amount }}</td>
-            </tr>
-            <tr>
-                <th>Approved By</th>
-                <td>{{ approvedby_name }}</td>
-            </tr>
-            <tr>
-                <th>Approval Date</th>
-                <td>{{ approval_date }}</td>
-            </tr>
-            <tr>
-                <th>Voucher ID</th>
-                <td>{{ voucher_id }}</td>
-            </tr>
-        </table>
-
-        <h3>Items Approved:</h3>
         <table>
             <thead>
                 <tr>
                     <th>Item</th>
                     <th>GL Code</th>
-                    <th>Qty</th>
+                    <th>Quantity</th>
                     <th>Unit Price</th>
-                    <th>Total</th>
+                    <th>Total Price</th>
                 </tr>
             </thead>
             <tbody>
@@ -102,6 +84,30 @@
                 {% endfor %}
             </tbody>
         </table>
+
+        <div class="reason-box">
+            <h4>Reason for Decline:</h4>
+            <p>{{ rejection_reason }}</p>
+            <p><em>- {{ rejector_name }}, {{ rejection_date }}</em></p>
+        </div>
+
+        <h3>Request Details:</h3>
+        <table>
+            <tr>
+                <th>Store</th>
+                <td>{{ store_name }}</td>
+            </tr>
+            <tr>
+                <th>Total Amount</th>
+                <td>{{ total_amount }}</td>
+            </tr>
+            <tr>
+                <th>Submitted Date</th>
+                <td>{{ request_date }}</td>
+            </tr>
+        </table>
+
+        <p>You may resubmit this request after making the necessary corrections.</p>
 
         <div class="footer">
             <p>This is an automated notification. Please do not reply.</p>

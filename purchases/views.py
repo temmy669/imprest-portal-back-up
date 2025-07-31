@@ -58,17 +58,6 @@ class PurchaseRequestView(APIView):
                 total_amount=total_amount
             )
 
-            # Create items
-            for item_data in request.data.get('items', []):
-                PurchaseRequestItem.objects.create(
-                    request=purchase_request,
-                    gl_code=item_data['gl_code'],
-                    expense_item=item_data['expense_item'],
-                    unit_price=item_data['unit_price'],
-                    quantity=item_data['quantity'],
-                    total_price=item_data['unit_price'] * item_data['quantity']
-                )
-
             return CustomResponse(True, "Purchase Request Created Successfully", 201, serializer.data)
         return CustomResponse(True, serializer.errors)
     
@@ -101,13 +90,14 @@ class ApprovePurchaseRequestView(APIView):
         self.check_object_permissions(request, pr)
 
         pr.status = 'approved'
+        pr.voucher_id = f"PV-000{pr.id}-{pr.created_at.strftime('%Y-%m-%d')}"
         pr.save()
 
         # TODO: Send notification to requester
         return Response(
             {
                 'status': 'approved',
-                'voucher_id': f"PV-{pr.id}-{pr.created_at.strftime('%Y-%m-%d')}"
+                'voucher_id': pr.voucher_id
             },
             status=status.HTTP_200_OK
         )
@@ -135,7 +125,7 @@ class DeclinePurchaseRequestView(APIView):
             )
 
         pr.status = 'declined'
-        pr.save()
+        pr.save(user=request.user)
 
         # Create decline comment
         Comment.objects.create(

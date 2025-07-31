@@ -15,16 +15,21 @@ def send_approval_notification(purchase_request):
         'request_id': f"PR-{purchase_request.id:04d}",
         'requester_name': requester.get_full_name(),
         'store_name': purchase_request.store.name,
+        'store_code': purchase_request.store.code,
+        'approvedby_name': purchase_request.updated_by.get_full_name(),
         'total_amount': f"₦{purchase_request.total_amount:,.2f}",
         'items': purchase_request.items.all(),
         'approval_date': purchase_request.updated_at.strftime("%b %d, %Y %I:%M %p"),
         'status': purchase_request.get_status_display(),
-        'voucher_id': getattr(purchase_request, 'voucher_id', 'Pending')
+        'voucher_id': getattr(purchase_request, 'voucher_id'),
+        'request_date': purchase_request.created_at.strftime("%b %d, %Y %I:%M %p"),
+        'company_name': settings.COMPANY_NAME
     }
 
     # Render HTML and plain text versions
-    html_message = render_to_string('email_templates/approval.html', context)
+    html_message = render_to_string('approval.html', context)
     plain_message = strip_tags(html_message)
+    print(html_message)
     
     # Send email
     send_mail(
@@ -36,7 +41,7 @@ def send_approval_notification(purchase_request):
         fail_silently=False
     )
 
-def send_rejection_notification(purchase_request, comment):
+def send_rejection_notification(purchase_request):
     """
     Sends rejection notification with reason
     """
@@ -44,13 +49,19 @@ def send_rejection_notification(purchase_request, comment):
     
     context = {
         'request_id': f"PR-{purchase_request.id:04d}",
+        'requester_name': requester.get_full_name(),
+        'voucher_id': getattr(purchase_request, 'voucher_id'),
         'rejector_name': purchase_request.updated_by.get_full_name(),
-        'rejection_reason': comment,
+        'rejection_reason': purchase_request.comments.last().text if purchase_request.comments.exists() else 'No reason provided',
         'items': purchase_request.items.all(),
-        'rejection_date': purchase_request.updated_at.strftime("%b %d, %Y %I:%M %p")
+        'rejection_date': purchase_request.updated_at.strftime("%b %d, %Y %I:%M %p"),
+        'company_name': settings.COMPANY_NAME,
+        'store_name': purchase_request.store.name,
+        'total_amount': f"₦{purchase_request.total_amount:,.2f}",
+        'request_date': purchase_request.created_at.strftime("%b %d, %Y %I:%M %p")
     }
 
-    html_message = render_to_string('emails/purchase_rejected.html', context)
+    html_message = render_to_string('rejection.html', context)
     plain_message = strip_tags(html_message)
     
     send_mail(

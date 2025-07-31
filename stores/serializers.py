@@ -11,7 +11,7 @@ class StoreSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Store
-        fields = ['name', 'code',]
+        fields = ['id','name', 'code',]
         
 class StoreRegionSerializer(serializers.ModelSerializer):
     stores = StoreSerializer(many=True, read_only=True)
