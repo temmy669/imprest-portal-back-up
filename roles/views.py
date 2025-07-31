@@ -15,6 +15,28 @@ class RoleListView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return CustomResponse(True, "Created", 201, serializer.data)
+    
+    def put(self, request):
+        role_id = request.data.get('id')
+        permissions = request.data.get('permissions', [])
+
+        try:
+            role = Role.objects.get(id=role_id)
+        except Role.DoesNotExist:
+            return CustomResponse(False, "Role not found", status=404)
+
+        # Update simple fields (non-M2M)
+        for key, value in request.data.items():
+            if key not in ['permissions', 'id']:
+                setattr(role, key, value)
+
+        role.save()
+
+        # Update ManyToManyField
+        if permissions:
+            role.permissions.set(permissions)
+
+        return CustomResponse(True, "Role updated successfully")
 
 class PermissionListView(APIView):
     serializer_class = PermissionSerializer()
