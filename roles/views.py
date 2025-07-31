@@ -33,8 +33,10 @@ class RoleListView(APIView):
         role.save()
 
         # Update ManyToManyField
+        # Add new permissions without removing old ones
         if permissions:
-            role.permissions.set(permissions)
+            role.permissions.add(*permissions)
+
 
         return CustomResponse(True, "Role updated successfully")
 

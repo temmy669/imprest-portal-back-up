@@ -55,8 +55,8 @@ def custom_exception_handler(exc, context):
         )
     if isinstance(exc, AuthenticationFailed):
         return Response(
-            {"status": False, "msg": "Session has expired"},
-            status=status.HTTP_401_UNAUTHORIZED,
+            {"status": False,  "msg": "Session has expired", "status_code": status.HTTP_410_GONE},
+
         )
 
     if isinstance(exc, (ObjectDoesNotExist, Http404)):

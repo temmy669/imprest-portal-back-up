@@ -3,6 +3,8 @@ from .views import (
     PurchaseRequestView,
     ApprovePurchaseRequestView,
     DeclinePurchaseRequestView,
+    DeclinePurchaseRequestItemView,
+    ApprovePurchaseRequestItemView,
 )
 
 urlpatterns = [
@@ -25,5 +27,17 @@ urlpatterns = [
         '<int:pk>/decline/',
         DeclinePurchaseRequestView.as_view(),
         name='decline-purchase-request'
+    ),
+    
+    path(
+        'purchase-requests/<int:pk>/items/<int:item_id>/decline/',
+        DeclinePurchaseRequestItemView.as_view(),
+        name='decline-purchase-request-item'
+    ),
+    
+    path(
+        'purchase-requests/<int:pk>/items/<int:item_id>/approve/',
+        ApprovePurchaseRequestItemView.as_view(),
+        name='approve-purchase-request-item'
     ),
 ]

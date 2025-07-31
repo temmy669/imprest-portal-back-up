@@ -239,7 +239,7 @@ class UserView(APIView):
         serializer = UserSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response({"message": "User created successfully"}, status=status.HTTP_200_OK)
+            return CustomResponse(True, "User Created successfully", data=serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def put(self, request):
