@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import PurchaseRequest, PurchaseRequestItem, Comment
 
+
 class PurchaseRequestItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = PurchaseRequestItem
@@ -25,7 +26,7 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
             'id', 'requester', 'store', 'status', 'status_display', 
             'total_amount', 'comment', 'items',
         ]
-        read_only_fields = ['total_amount', 'requester_email', 'requester_phone', 'store_code', 'request_date']
+        read_only_fields = ['total_amount', 'requester_email', 'role', 'requester_phone', 'store_code', 'request_date', 'request_id', 'comments']
     
     def to_representation(self, instance):
         rep = super().to_representation(instance)
@@ -35,7 +36,10 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
         rep['requester_email'] = instance .requester.email
         rep['requester_phone'] = instance.requester.phone_number
         rep['request_date'] = instance.created_at.strftime('%d-%m-%Y')
-        
+        rep['request_id'] = f"PR-{instance.id:04d}"
+        rep['role'] = instance.requester.role.name if instance.requester.role else None
+      
+         
         return rep
     
     def validate(self, data):

@@ -17,9 +17,18 @@ class PurchaseRequest(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     comment = models.TextField(blank=True, null=True)
+    voucher_id = models.CharField(max_length=100, default='not issued', blank=True, null=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='updated_requests')
 
     class Meta:
         ordering = ['-created_at']
+    
+    def save(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
+        if user:
+            self.updated_by = user
+        super().save(*args, **kwargs)
+
 
     def __str__(self):
         return f"PR-{self.id} - {self.status} by {self.requester.first_name} {self.requester.last_name}"

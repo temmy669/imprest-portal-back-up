@@ -1,0 +1,23 @@
+Purchase Request Approved
+
+Dear {{ requester_name }},
+
+Your purchase request {{ request_id }} has been approved.
+
+Request Details:
+Store: {{ store_name }} ({{ store_code }})
+Total Amount: ₦{{ total_amount }}
+Approved By: {{ approvedby_name }}
+Approval Date: {{ approval_date }}
+Voucher ID: {{ voucher_id }}
+
+Items Approved:
+----------------------------------------------------------
+Item                 | GL Code | Qty | Unit Price | Total
+-----------------------------------------------------------
+{% for item in purchase_request.items.all %}
+{{ item.expense_item }} | {{ item.gl_code }} | {{ item.quantity }} | ₦{{ item.unit_price|floatformat:2 }} | ₦{{ item.total_price|floatformat:2 }}
+{% endfor %}
+
+This is an automated notification. Please do not reply.
+© {% now "Y" %} {{ company_name }}
