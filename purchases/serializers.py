@@ -5,7 +5,7 @@ from .models import PurchaseRequest, PurchaseRequestItem, Comment
 class PurchaseRequestItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = PurchaseRequestItem
-        fields = ['id', 'gl_code', 'expense_item', 'unit_price', 'quantity', 'total_price']
+        fields = ['id', 'gl_code', 'expense_item', 'unit_price', 'quantity', 'total_price', 'status']
         read_only_fields = ['total_price']
 
 class CommentSerializer(serializers.ModelSerializer):
@@ -26,7 +26,7 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
             'id', 'requester', 'store', 'status', 'status_display', 
             'total_amount', 'comment', 'items',
         ]
-        read_only_fields = ['total_amount', 'requester_email', 'role', 'requester_phone', 'store_code', 'request_date', 'request_id', 'comments']
+        read_only_fields = ['total_amount', 'requester_email', 'role', 'requester_phone', 'store_code', 'request_date', 'request_id', 'comments', 'voucher_id',]
     
     def to_representation(self, instance):
         rep = super().to_representation(instance)
@@ -38,22 +38,27 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
         rep['request_date'] = instance.created_at.strftime('%d-%m-%Y')
         rep['request_id'] = f"PR-{instance.id:04d}"
         rep['role'] = instance.requester.role.name if instance.requester.role else None
+        rep['voucher'] = instance.voucher_id 
+        
       
          
         return rep
     
     def validate(self, data):
         items = data.get('items', [])
-        total = sum(item['unit_price'] * item['quantity'] for item in items)
-        
-        if total < 5000:  # N5,000 threshold from FRD
-            raise serializers.ValidationError(
-                "You do not require a purchase request for items below N5,000"
-            )
-        
+        total = 0
+
+        for item in items:
+            item_total = item['unit_price'] * item['quantity']
+            if item_total < 5000:
+                raise serializers.ValidationError(
+                    f"Item '{item['expense_item']}' total is below ₦5,000 and cannot be included in a purchase request."
+                )
+            total += item_total
+
         data['total_amount'] = total
         return data
-    
+
     def create(self, validated_data):
         items_data = validated_data.pop('items')
         request = PurchaseRequest.objects.create(**validated_data)

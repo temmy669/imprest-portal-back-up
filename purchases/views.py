@@ -55,10 +55,6 @@ class PurchaseRequestView(APIView):
                 for item in request.data.get('items', [])
             )
 
-            # Check ₦5,000 threshold
-            if total_amount < 5000:
-                return CustomResponse( True, "Purchase requests required only for amounts ≥ ₦5,000")
-
             # Save the request
             purchase_request = serializer.save(
                 requester=request.user,
@@ -91,23 +87,61 @@ class ApprovePurchaseRequestView(APIView):
         description="Only Area Managers can approve requests for their stores",
     )
     def post(self, request, pk):
+        purchase_request = get_object_or_404(PurchaseRequest, pk=pk)
+
+        # Object-level permission check
+        self.check_object_permissions(request, purchase_request)
+
+        # Approve the request
+        purchase_request.updated_by = request.user
+        purchase_request.status = 'approved'
+        purchase_request.voucher_id = f"PV-000{purchase_request.id}-{purchase_request.created_at.strftime('%Y-%m-%d')}"
+        purchase_request.save()
+
+        # Approve all related items
+        purchase_request.items.all().update(status='approved')
+
+        return Response({
+            "message": "Purchase request and items approved successfully.",
+            "voucher_id": purchase_request.voucher_id
+        }, status=status.HTTP_200_OK)
+
+        
+class ApprovePurchaseRequestItemView(APIView):
+    authentication_classes = [JWTAuthenticationFromCookie]
+    permission_classes = [IsAuthenticated, ApprovePurchaseRequest]
+
+    @extend_schema(
+        summary="Approve purchase request item",
+        description="Approves a specific item in a purchase request",
+    )
+    def post(self, request, pk, item_id):
         pr = get_object_or_404(PurchaseRequest, pk=pk)
+        item = get_object_or_404(PurchaseRequestItem, pk=item_id, request=pr)
 
         # Object-level permission check
         self.check_object_permissions(request, pr)
 
-        pr.status = 'approved'
-        pr.voucher_id = f"PV-000{pr.id}-{pr.created_at.strftime('%Y-%m-%d')}"
-        pr.save()
+        item.status = 'approved'
+        item.save()
+        
+        # check for all approved items
+        all_approved = all(i.status == 'approved' for i in pr.items.all())
+        
+        if not all_approved:
+            pr.status = 'declined'
+            pr.save(user=request.user)
+            
+            
 
-        # TODO: Send notification to requester
         return Response(
             {
                 'status': 'approved',
-                'voucher_id': pr.voucher_id
+                'item_id': item.id
             },
             status=status.HTTP_200_OK
         )
+    
         
         
 class DeclinePurchaseRequestView(APIView):
@@ -133,6 +167,8 @@ class DeclinePurchaseRequestView(APIView):
 
         pr.status = 'declined'
         pr.save(user=request.user)
+        
+       
 
         # Create decline comment
         Comment.objects.create(
@@ -150,3 +186,36 @@ class DeclinePurchaseRequestView(APIView):
             status=status.HTTP_200_OK
         )
 
+class DeclinePurchaseRequestItemView(APIView):
+    authentication_classes = [JWTAuthenticationFromCookie]
+    permission_classes = [IsAuthenticated, ApprovePurchaseRequest]
+
+    @extend_schema(
+        summary="Decline purchase request item",
+        description="Declines a specific item in a purchase request",
+    )
+    def post(self, request, pk, item_id):
+        pr = get_object_or_404(PurchaseRequest, pk=pk)
+        item = get_object_or_404(PurchaseRequestItem, pk=item_id, request=pr)
+
+        # Object-level permission check
+        self.check_object_permissions(request, pr)
+
+        item.status = 'declined'
+        item.save()
+        
+         # check for all approved items
+        all_approved = all(i.status == 'approved' for i in pr.items.all())
+        
+        if not all_approved:
+            pr.status = 'declined' 
+            pr.save(user=request.user)
+
+
+        return Response(
+            {
+                'status': 'declined',
+                'item_id': item.id
+            },
+            status=status.HTTP_200_OK
+        )
