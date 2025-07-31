@@ -82,8 +82,13 @@ class User(AbstractUser):
     )
 
     def save(self, *args, **kwargs):
-        """Custom save method to update `data_updated_at`."""
+        # Auto-fill username if not set
+        if not self.username and self.email:
+            self.username = self.email
+
+        # Update data_updated_at timestamp
         self.data_updated_at = timezone.now()
+
         super().save(*args, **kwargs)
 
 

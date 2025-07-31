@@ -67,6 +67,8 @@ class UserSerializer(serializers.ModelSerializer):
             for attr, value in validated_data.items():
                 setattr(user, attr, value)
         else:
+            if 'username' not in validated_data or not validated_data.get('username'):
+                validated_data['username'] = email
             user = User(**validated_data)
 
         user.role = role
