@@ -37,7 +37,7 @@ class PurchaseRequestView(APIView):
             queryset = queryset.filter(requester=user)
         # Area Managers see requests from their stores
         elif user.role.name == 'Area Manager':
-            queryset = queryset.filter(store__area_manager=user)
+            queryset = queryset.filter(store__region__area_manager=user)
             
 
         serializer = PurchaseRequestSerializer(queryset, many=True)
