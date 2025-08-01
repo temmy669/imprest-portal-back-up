@@ -30,13 +30,13 @@ urlpatterns = [
     ),
     
     path(
-        'purchase-requests/<int:pk>/items/<int:item_id>/decline/',
+        '<int:pk>/items/<int:item_id>/decline/',
         DeclinePurchaseRequestItemView.as_view(),
         name='decline-purchase-request-item'
     ),
     
     path(
-        'purchase-requests/<int:pk>/items/<int:item_id>/approve/',
+        '<int:pk>/items/<int:item_id>/approve/',
         ApprovePurchaseRequestItemView.as_view(),
         name='approve-purchase-request-item'
     ),
