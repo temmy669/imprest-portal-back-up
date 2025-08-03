@@ -97,14 +97,17 @@ class ApprovePurchaseRequestView(APIView):
         purchase_request.status = 'approved'
         purchase_request.voucher_id = f"PV-000{purchase_request.id}-{purchase_request.created_at.strftime('%Y-%m-%d')}"
         purchase_request.save()
+        
+        purchase_request_items = purchase_request.items.all()
 
         # Approve all related items
-        purchase_request.items.all().update(status='approved')
+        purchase_request_items.update(status='approved')
 
         return Response({
             "message": "Purchase request and items approved successfully.",
             "voucher_id": purchase_request.voucher_id
         }, status=status.HTTP_200_OK)
+
 
         
 class ApprovePurchaseRequestItemView(APIView):
@@ -122,26 +125,34 @@ class ApprovePurchaseRequestItemView(APIView):
         # Object-level permission check
         self.check_object_permissions(request, pr)
 
+        if item.status == 'approved':
+            return CustomResponse(True, 'Item is already approved.', 400)
+
         item.status = 'approved'
         item.save()
-        
-        # check for all approved items
-        all_approved = all(i.status == 'approved' for i in pr.items.all())
-        
-        if not all_approved:
+
+        items = pr.items.all()
+
+
+        # Check if any item is declined
+        if any(i.status == 'declined' for i in items):
             pr.status = 'declined'
             pr.save(user=request.user)
             
-            
+         # Check if all items are approved
+        elif all(i.status == 'approved' for i in items):
+            pr.status = 'approved'
+            pr.voucher_id = f"PV-000{pr.id}-{pr.created_at.strftime('%Y-%m-%d')}"
+            pr.save(user=request.user)
 
-        return Response(
+        return CustomResponse(True,
             {
                 'status': 'approved',
                 'item_id': item.id
             },
-            status=status.HTTP_200_OK
+            200
         )
-    
+
         
         
 class DeclinePurchaseRequestView(APIView):
@@ -160,9 +171,9 @@ class DeclinePurchaseRequestView(APIView):
 
         comment_text = request.data.get('comment', '').strip()
         if not comment_text:
-            return Response(
-                {'error': 'Comment is required when declining'},
-                status=status.HTTP_400_BAD_REQUEST
+            return CustomResponse(True,
+               'Comment is required when declining',
+                400
             )
 
         pr.status = 'declined'
@@ -177,13 +188,12 @@ class DeclinePurchaseRequestView(APIView):
             text=comment_text
         )
 
-        # TODO: Send notification to requester with comment
-        return Response(
+        return CustomResponse(True,
             {
                 'status': 'declined',
                 'comment': comment_text
             },
-            status=status.HTTP_200_OK
+            200
         )
 
 class DeclinePurchaseRequestItemView(APIView):
@@ -198,24 +208,37 @@ class DeclinePurchaseRequestItemView(APIView):
         pr = get_object_or_404(PurchaseRequest, pk=pk)
         item = get_object_or_404(PurchaseRequestItem, pk=item_id, request=pr)
 
-        # Object-level permission check
         self.check_object_permissions(request, pr)
+
+        comment_text = request.data.get('comment', '').strip()
+        
+        if not comment_text:
+            return CustomResponse(True,
+                 'Comment is required when declining',
+                400
+            )
+
+        if item.status == 'declined':
+            return CustomResponse(True, "Item is already declined", 400)
 
         item.status = 'declined'
         item.save()
-        
-         # check for all approved items
-        all_approved = all(i.status == 'approved' for i in pr.items.all())
-        
-        if not all_approved:
-            pr.status = 'declined' 
-            pr.save(user=request.user)
 
+        pr.status = 'declined'
+        pr.save(user=request.user)
 
-        return Response(
+        # Save comment (if supported)
+        Comment.objects.create(
+            request=pr,
+            user=request.user,
+            text=comment_text
+        )
+
+        return CustomResponse(True,
             {
                 'status': 'declined',
-                'item_id': item.id
+                'item_id': item.id,
+                'comment': comment_text
             },
-            status=status.HTTP_200_OK
+            200
         )
