@@ -154,7 +154,6 @@ class ApprovePurchaseRequestItemView(APIView):
         )
 
         
-        
 class DeclinePurchaseRequestView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
     permission_classes = [IsAuthenticated, DeclinePurchaseRequest]
@@ -223,7 +222,13 @@ class DeclinePurchaseRequestItemView(APIView):
 
         item.status = 'declined'
         item.save()
-
+        
+        items = pr.items.all()
+        
+        # Check if all items are still pending
+        if any(item.status == 'pending' for item in  items):
+            pr.status = 'pending'
+              
         pr.status = 'declined'
         pr.save(user=request.user)
 

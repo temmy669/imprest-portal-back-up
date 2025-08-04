@@ -96,8 +96,10 @@
                     <td>{{ item.expense_item }}</td>
                     <td>{{ item.gl_code }}</td>
                     <td>{{ item.quantity }}</td>
+                    <td>{{item.status}}</td>
                     <td>₦{{ item.unit_price|floatformat:2 }}</td>
                     <td>₦{{ item.total_price|floatformat:2 }}</td>
+                    
                 </tr>
                 {% endfor %}
             </tbody>
