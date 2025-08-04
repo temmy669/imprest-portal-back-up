@@ -59,7 +59,7 @@ def send_rejection_notification(purchase_request):
         'store_name': purchase_request.store.name,
         'total_amount': f"₦{purchase_request.total_amount:,.2f}",
         'request_date': purchase_request.created_at.strftime("%b %d, %Y %I:%M %p"),
-        'status' : purchase_request.items.get_status_display()
+        'status' : purchase_request.items.first().status if purchase_request.items.exists() else 'pending'
     }
 
     html_message = render_to_string('rejection.html', context)
