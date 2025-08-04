@@ -52,13 +52,14 @@ def send_rejection_notification(purchase_request):
         'requester_name': requester.get_full_name(),
         'voucher_id': getattr(purchase_request, 'voucher_id'),
         'rejector_name': purchase_request.updated_by.get_full_name(),
-        'rejection_reason': purchase_request.comments.last().text if purchase_request.comments.exists() else 'No reason provided',
+        'rejection_reason': purchase_request.comments.filter(request__id=purchase_request.id),
         'items': purchase_request.items.all(),
         'rejection_date': purchase_request.updated_at.strftime("%b %d, %Y %I:%M %p"),
         'company_name': settings.COMPANY_NAME,
         'store_name': purchase_request.store.name,
         'total_amount': f"₦{purchase_request.total_amount:,.2f}",
-        'request_date': purchase_request.created_at.strftime("%b %d, %Y %I:%M %p")
+        'request_date': purchase_request.created_at.strftime("%b %d, %Y %I:%M %p"),
+        'status' : purchase_request.item.get_status_display()
     }
 
     html_message = render_to_string('rejection.html', context)
