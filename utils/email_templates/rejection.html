@@ -68,6 +68,7 @@
                     <th>Item</th>
                     <th>GL Code</th>
                     <th>Quantity</th>
+                    <th>Status</th>
                     <th>Unit Price</th>
                     <th>Total Price</th>
                 </tr>
@@ -78,7 +79,7 @@
                     <td>{{ item.expense_item }}</td>
                     <td>{{ item.gl_code }}</td>
                     <td>{{ item.quantity }}</td>
-                    <td>{{item.status}}</td>
+                    <td>{{status}}</td>
                     <td>₦{{ item.unit_price|floatformat:2 }}</td>
                     <td>₦{{ item.total_price|floatformat:2 }}</td>
                 </tr>
