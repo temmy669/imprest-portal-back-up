@@ -36,7 +36,7 @@ class PurchaseRequest(models.Model):
 
 class PurchaseRequestItem(models.Model):
     request = models.ForeignKey(PurchaseRequest, on_delete=models.CASCADE, related_name='items')
-    gl_code = models.CharField(max_length=10, unique=True)  # From Appendix 2
+    gl_code = models.CharField(max_length=10)  # From Appendix 2
     expense_item = models.CharField(max_length=100)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     quantity = models.PositiveIntegerField(default=1)
