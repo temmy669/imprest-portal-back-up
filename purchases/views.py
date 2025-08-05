@@ -62,7 +62,7 @@ class PurchaseRequestView(APIView):
             )
 
             return CustomResponse(True, "Purchase Request Created Successfully", 201, serializer.data)
-        return CustomResponse(True, serializer.errors)
+        return CustomResponse(False, serializer.errors)
     
     def put(self, request, pk):
         """
@@ -74,8 +74,8 @@ class PurchaseRequestView(APIView):
         serializer = PurchaseRequestSerializer(pr, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return CustomResponse(True, serializer.data, 200)
+        return CustomResponse(False, serializer.errors, 400)
     
     
 class ApprovePurchaseRequestView(APIView):
@@ -91,6 +91,9 @@ class ApprovePurchaseRequestView(APIView):
 
         # Object-level permission check
         self.check_object_permissions(request, purchase_request)
+        
+        if purchase_request.status == 'approved':
+            return CustomResponse(False, 'Item is already approved.', 400)
 
         # Approve the request
         purchase_request.updated_by = request.user
@@ -103,10 +106,10 @@ class ApprovePurchaseRequestView(APIView):
         # Approve all related items
         purchase_request_items.update(status='approved')
 
-        return Response({
+        return CustomResponse(True,{
             "message": "Purchase request and items approved successfully.",
             "voucher_id": purchase_request.voucher_id
-        }, status=status.HTTP_200_OK)
+        }, 200)
 
 
         
@@ -126,7 +129,7 @@ class ApprovePurchaseRequestItemView(APIView):
         self.check_object_permissions(request, pr)
 
         if item.status == 'approved':
-            return CustomResponse(True, 'Item is already approved.', 400)
+            return CustomResponse(False, 'Item is already approved.', 400)
 
         item.status = 'approved'
         item.save()
@@ -170,7 +173,7 @@ class DeclinePurchaseRequestView(APIView):
 
         comment_text = request.data.get('comment', '').strip()
         if not comment_text:
-            return CustomResponse(True,
+            return CustomResponse(False,
                'Comment is required when declining',
                 400
             )
@@ -212,13 +215,13 @@ class DeclinePurchaseRequestItemView(APIView):
         comment_text = request.data.get('comment', '').strip()
         
         if not comment_text:
-            return CustomResponse(True,
+            return CustomResponse(False,
                  'Comment is required when declining',
                 400
             )
 
         if item.status == 'declined':
-            return CustomResponse(True, "Item is already declined", 400)
+            return CustomResponse(False, "Item is already declined", 400)
 
         item.status = 'declined'
         item.save()
@@ -228,9 +231,11 @@ class DeclinePurchaseRequestItemView(APIView):
         # Check if all items are still pending
         if any(item.status == 'pending' for item in  items):
             pr.status = 'pending'
-              
-        pr.status = 'declined'
-        pr.save(user=request.user)
+        
+        elif all(item.status != 'pending' for item in items):
+            print("okay")
+            pr.status = 'declined'
+            pr.save(user=request.user)
 
         # Save comment (if supported)
         Comment.objects.create(

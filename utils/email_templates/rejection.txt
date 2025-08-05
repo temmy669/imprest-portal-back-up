@@ -2,7 +2,7 @@ Purchase Request Declined
 
 Dear {{ requester_name }},
 
-Your purchase request {{ voucher_id }} for the following items has been declined:
+Your purchase request {{ request_id }} for the following items has been declined:
 
 Items:
 {% for item in items %}
