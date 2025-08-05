@@ -3,6 +3,7 @@ from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 from users.models import User
+from purchases.models import Comment
 
 def send_approval_notification(purchase_request):
     """
@@ -47,20 +48,24 @@ def send_rejection_notification(purchase_request):
     """
     requester = User.objects.get(id=purchase_request.requester_id)
     
+    items = purchase_request.items.all()
+    comments =  Comment.objects.filter(user=purchase_request.updated_by, request=purchase_request).order_by('-created_at').first()
+    
     context = {
         'request_id': f"PR-{purchase_request.id:04d}",
         'requester_name': requester.get_full_name(),
         'voucher_id': getattr(purchase_request, 'voucher_id'),
         'rejector_name': purchase_request.updated_by.get_full_name(),
-        'rejection_reason': purchase_request.comments.filter(request__id=purchase_request.id),
-        'items': purchase_request.items.all(),
+        'rejection_reason': comments.text if comments else "No reason provided.",
+        'items': items, 
         'rejection_date': purchase_request.updated_at.strftime("%b %d, %Y %I:%M %p"),
         'company_name': settings.COMPANY_NAME,
         'store_name': purchase_request.store.name,
         'total_amount': f"₦{purchase_request.total_amount:,.2f}",
         'request_date': purchase_request.created_at.strftime("%b %d, %Y %I:%M %p"),
-        'status' : purchase_request.items.first().status if purchase_request.items.exists() else 'pending'
+        'status': purchase_request.get_status_display()
     }
+
 
     html_message = render_to_string('rejection.html', context)
     plain_message = strip_tags(html_message)
