@@ -5,6 +5,7 @@ from .models import Region, Store
 from .serializers import RegionSerializer, StoreSerializer, StoreRegionSerializer
 from django.contrib.auth import get_user_model
 from helpers.response import CustomResponse
+from django.shortcuts import get_object_or_404
 
 User = get_user_model()
 
@@ -109,10 +110,9 @@ class StoreByRegionView(APIView):
         ]
         """
         # Only return active stores belonging to the specified region
-        stores = Store.objects.filter(region_id=region_id, is_active=True)
-        serializer = StoreRegionSerializer(stores, many=True)
-        return CustomResponse(True, "Store returned accoring to selected region", data=serializer.data)
-
+        region = get_object_or_404(Region, id=region_id)
+        serializer = StoreRegionSerializer(region)
+        return CustomResponse(True, "Store returned according to selected region", data=serializer.data)
 
 class AssignStoresToUserView(APIView):
     serializer_class = StoreSerializer()

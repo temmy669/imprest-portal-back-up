@@ -11,6 +11,10 @@ class BaseRolePermission(BasePermission):
 
     def has_permission(self, request, view):
         user = request.user
+        
+        # Block inactive users immediately
+        if not getattr(user, 'is_active', False):
+            return False
 
         # Admins and Superusers always allowed
         if getattr(user, 'is_superuser', False) or getattr(user.role, 'name', None) == 'Admin':

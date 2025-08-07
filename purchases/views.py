@@ -9,6 +9,9 @@ from users.auth import JWTAuthenticationFromCookie
 from drf_spectacular.utils import extend_schema
 from rest_framework.permissions import IsAuthenticated
 from helpers.response import CustomResponse
+from datetime import datetime
+from django.db.models import Count
+from rest_framework.pagination import PageNumberPagination
 
 class PurchaseRequestView(APIView):
     """
@@ -39,9 +42,29 @@ class PurchaseRequestView(APIView):
         elif user.role.name == 'Area Manager':
             queryset = queryset.filter(store__region__area_manager=user)
             
+    
+        # Get status counts from full queryset (before pagination)
+        status_counts = queryset.values('status').annotate(count=Count('id'))
+        status_count_dict = {entry['status']: entry['count'] for entry in status_counts}
 
-        serializer = PurchaseRequestSerializer(queryset, many=True)
-        return CustomResponse(True, "Purchase Requests Returned Successfully", data = serializer.data)
+        # Paginate the queryset
+        paginator = PageNumberPagination()
+        paginated_queryset = paginator.paginate_queryset(queryset, request)
+
+        # Serialize paginated data
+        serializer = PurchaseRequestSerializer(paginated_queryset, many=True)
+
+        # Build custom response data
+        response_data = {
+            "count": paginator.page.paginator.count,
+            "next": paginator.get_next_link(),
+            "previous": paginator.get_previous_link(),
+            "results": serializer.data,
+            "status_counts": status_count_dict,
+        }
+
+        return CustomResponse(True, "Filtered purchase requests retrieved", 200, response_data)
+
 
     def post(self, request):
         """
@@ -252,3 +275,103 @@ class DeclinePurchaseRequestItemView(APIView):
             },
             200
         )
+        
+class SearchPurchaseRequestView(APIView):
+    authentication_classes = [JWTAuthenticationFromCookie]
+    permission_classes = [IsAuthenticated, ViewPurchaseRequest]
+
+    @extend_schema(
+        summary="Search purchase requests",
+    )
+    def get(self, request):
+        """
+        Search purchase requests by request ID (e.g. 'PR-0027')
+        """
+        search_query = request.query_params.get('q', '').strip()
+        if not search_query:
+            return CustomResponse(False, "Search query is required", 400)
+
+        queryset = PurchaseRequest.objects.none()
+
+        if search_query.upper().startswith("PR-"):
+            try:
+                request_id = int(search_query.upper().replace("PR-", ""))
+                queryset = PurchaseRequest.objects.filter(id=request_id)
+            except ValueError:
+                return CustomResponse(False, "Invalid request ID format", 400)
+        else:
+            return CustomResponse(False, "Only PR-XXXX search is supported", 400)
+
+        # Get status counts from full queryset (before pagination)
+        status_counts = queryset.values('status').annotate(count=Count('id'))
+        status_count_dict = {entry['status']: entry['count'] for entry in status_counts}
+
+        # Paginate the queryset
+        paginator = PageNumberPagination()
+        paginated_queryset = paginator.paginate_queryset(queryset, request)
+
+        # Serialize paginated data
+        serializer = PurchaseRequestSerializer(paginated_queryset, many=True)
+
+        # Build custom response data
+        response_data = {
+            "count": paginator.page.paginator.count,
+            "next": paginator.get_next_link(),
+            "previous": paginator.get_previous_link(),
+            "results": serializer.data,
+            "status_counts": status_count_dict,
+        }
+
+        return CustomResponse(True, "Filtered purchase requests retrieved", 200, response_data)
+
+
+class DateRangeFilterView(APIView):
+    authentication_classes = [JWTAuthenticationFromCookie]
+    permission_classes = [IsAuthenticated, ViewPurchaseRequest]
+
+    def get(self, request):
+        """
+        Filter purchase requests by date range with pagination and status counts.
+        """
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+
+        if not start_date or not end_date:
+            return CustomResponse(False, "Both start_date and end_date are required", 400)
+
+        try:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d')
+            end_date = datetime.strptime(end_date, '%Y-%m-%d')
+        except ValueError:
+            return CustomResponse(False, "Invalid date format. Use YYYY-MM-DD", 400)
+
+        if start_date > end_date:
+            return CustomResponse(False, "start_date cannot be after end_date", 400)
+
+        # Base queryset
+        queryset = PurchaseRequest.objects.filter(
+            created_at__date__gte=start_date.date(),
+            created_at__date__lte=end_date.date()
+        )
+
+        # Get status counts (from full, unpaginated queryset)
+        status_counts = queryset.values('status').annotate(count=Count('id'))
+        status_count_dict = {entry['status']: entry['count'] for entry in status_counts}
+
+        # Paginate the queryset
+        paginator = PageNumberPagination()
+        paginated_queryset = paginator.paginate_queryset(queryset, request)
+
+        # Serialize paginated data
+        serializer = PurchaseRequestSerializer(paginated_queryset, many=True)
+
+        # Build custom response data
+        response_data = {
+            "count": paginator.page.paginator.count,
+            "next": paginator.get_next_link(),
+            "previous": paginator.get_previous_link(),
+            "results": serializer.data,
+            "status_counts": status_count_dict
+        }
+
+        return CustomResponse(True, "Filtered purchase requests retrieved", 200, response_data)

@@ -127,6 +127,7 @@ def custom_exception_handler(exc, context):
                 {"status": False, "msg": "Invalid parameters"},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+        
 
         elif "Given token not valid for any token type" in str(exc):
             messages = exc.detail.get("messages", None)
