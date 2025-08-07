@@ -18,11 +18,12 @@ from users.auth_utils import (
 from django.shortcuts import redirect
 from django.utils.crypto import get_random_string
 from urllib.parse import urlencode
-from .models import OAuthState
+from .models import *
 from rest_framework.exceptions import AuthenticationFailed, ValidationError, APIException
 from django.http import JsonResponse
 from .serializers import UserSerializer
 from urllib.parse import urlencode
+from django.db.models import Q, Count
 
 User = get_user_model()
 
@@ -30,6 +31,7 @@ from utils.permissions import *
 from rest_framework.permissions import IsAuthenticated
 from .auth import JWTAuthenticationFromCookie
 from django.http import HttpResponseRedirect
+from rest_framework.pagination import PageNumberPagination
  
 
 @extend_schema(
@@ -227,9 +229,28 @@ class UserView(APIView):
     """
     def get(self, request):
         users = User.objects.all()
-        serializer = UserSerializer(users, many=True)
-        return CustomResponse(True, "Users retrieved successfully", data=serializer.data)
-    
+        
+         # Count active and inactive users
+        active_count = users.filter(is_active=True).count()
+        inactive_count = users.filter(is_active=False).count()
+
+
+        paginator = PageNumberPagination()
+        paginated_users = paginator.paginate_queryset(users, request)
+
+        serializer = UserSerializer(paginated_users, many=True)
+
+        response_data = {
+            "count": paginator.page.paginator.count,
+            "next": paginator.get_next_link(),
+            "previous": paginator.get_previous_link(),
+            "results": serializer.data,
+            "active": active_count,
+            "inactive": inactive_count
+        }
+
+        return CustomResponse(True, "Users retrieved successfully", data=response_data)
+
    
     def post(self, request):
         """
@@ -261,7 +282,71 @@ class UserView(APIView):
             return Response({"message": "User updated successfully"}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
+class SearchUserView(APIView):
+    authentication_classes = [JWTAuthenticationFromCookie]
+    permission_classes = [IsAuthenticated, ManageUsers]
+    def get(self, request):
+        search_query = request.query_params.get('q', '').strip()
+        if not search_query:
+            return CustomResponse(False, "Search query is required", 400)
 
+        users = User.objects.filter(
+            Q(first_name__icontains=search_query) |
+            Q(last_name__icontains=search_query) |
+            Q(email__icontains=search_query)
+        )
+        
+         # Count active and inactive users
+        active_count = users.filter(is_active=True).count()
+        inactive_count = users.filter(is_active=False).count()
+
+
+        paginator = PageNumberPagination()
+        paginated_users = paginator.paginate_queryset(users, request)
+
+        serializer = UserSerializer(paginated_users, many=True)
+
+        response_data = {
+            "count": paginator.page.paginator.count,
+            "next": paginator.get_next_link(),
+            "previous": paginator.get_previous_link(),
+            "results": serializer.data,
+            "active": active_count,
+            "inactive": inactive_count,
+            
+        }
+
+        return CustomResponse(True, "Search successful", 200, response_data)
+
+class ToggleUserActivationView(APIView):
+    authentication_classes = [JWTAuthenticationFromCookie]
+    permission_classes = [IsAuthenticated, ManageUsers]
+
+    def post(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+            user.is_active = not user.is_active
+            user.save()
+
+            # Count active and inactive users
+            active_count = User.objects.filter(is_active=True).count()
+            inactive_count = User.objects.filter(is_active=False).count()
+
+            status_msg = "User reactivated successfully" if user.is_active else "User deactivated successfully"
+
+            return CustomResponse(
+                True,
+                status_msg,
+                200,
+                {
+                    "user_id": str(user.id),
+                    "is_active": user.is_active,
+                    "active_users": active_count,
+                    "inactive_users": inactive_count
+                }
+            )
+        except User.DoesNotExist:
+            return CustomResponse(False, "User not found", 404)
 
 class DummyLogin(APIView):
     """

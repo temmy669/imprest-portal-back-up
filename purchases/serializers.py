@@ -26,7 +26,7 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
             'id', 'requester', 'store', 'status', 'status_display', 
             'total_amount', 'comment', 'items',
         ]
-        read_only_fields = ['total_amount', 'requester_email', 'role', 'requester_phone', 'store_code', 'request_date', 'request_id', 'comments', 'voucher_id',]
+        read_only_fields = ['total_amount', 'requester_email', 'role', 'requester_phone', 'store_code', 'request_date', 'request_id', 'comments', 'voucher_id','approved_by', 'approval_date']
     
     def to_representation(self, instance):
         rep = super().to_representation(instance)
@@ -39,10 +39,11 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
         rep['request_id'] = f"PR-{instance.id:04d}"
         rep['role'] = instance.requester.role.name if instance.requester.role else None
         rep['voucher'] = instance.voucher_id 
-        
-      
-         
+        rep['approved_by'] = f"{instance.updated_by.first_name} {instance.updated_by.last_name}" if instance.updated_by else None
+        rep['approval_date'] = instance.updated_at.strftime('%d-%m-%Y')
+    
         return rep
+        
     
     def validate(self, data):
         items = data.get('items', [])

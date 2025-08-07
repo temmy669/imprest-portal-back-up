@@ -14,8 +14,12 @@ class StoreSerializer(serializers.ModelSerializer):
         fields = ['id','name', 'code',]
         
 class StoreRegionSerializer(serializers.ModelSerializer):
-    stores = StoreSerializer(many=True, read_only=True)
-    
+    stores = serializers.SerializerMethodField()
+
     class Meta:
         model = Region
         fields = ['id', 'name', 'stores']
+
+    def get_stores(self, obj):
+        stores = obj.region_stores.filter(is_active=True)
+        return StoreSerializer(stores, many=True).data

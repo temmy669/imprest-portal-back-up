@@ -23,7 +23,7 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'first_name', 'last_name', 'email', 'role', 'assigned_stores', 'store', 'region']
-        read_only_fields = ['id', 'date_added']
+        read_only_fields = ['id', 'date_added', 'active_user_count']
 
     def to_representation(self, instance):
         rep = super().to_representation(instance)
@@ -43,6 +43,12 @@ class UserSerializer(serializers.ModelSerializer):
             rep.pop('assigned_stores', None)
 
         return rep
+    
+    def active_user_count(self, data):
+        user = User.objects.filter(is_active=True).count()
+        data['active_user_count'] = user
+        return data
+        
 
     def create(self, validated_data):
         # Extract nested role data if needed

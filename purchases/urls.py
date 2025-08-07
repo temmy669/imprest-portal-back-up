@@ -5,6 +5,8 @@ from .views import (
     DeclinePurchaseRequestView,
     DeclinePurchaseRequestItemView,
     ApprovePurchaseRequestItemView,
+    SearchPurchaseRequestView,
+    DateRangeFilterView,
 )
 
 urlpatterns = [
@@ -40,4 +42,16 @@ urlpatterns = [
         ApprovePurchaseRequestItemView.as_view(),
         name='approve-purchase-request-item'
     ),
+    
+    path(
+        'search/',
+        SearchPurchaseRequestView.as_view(),
+        name='search-purchase-request'
+    ),
+    
+    path(
+        'filter/date-range/',
+        DateRangeFilterView.as_view(),
+        name='date-range-filter'
+    )
 ]
