@@ -1,6 +1,6 @@
 from rest_framework.permissions import BasePermission
 from purchases.models import PurchaseRequest
-
+from helpers.exceptions import CustomValidationException
 class BaseRolePermission(BasePermission):
     """
     Base permission class that all other permissions will inherit from
@@ -14,6 +14,7 @@ class BaseRolePermission(BasePermission):
         
         # Block inactive users immediately
         if not getattr(user, 'is_active', False):
+            raise CustomValidationException("Your account is not active. Please contact your administrator.")
             return False
 
         # Admins and Superusers always allowed

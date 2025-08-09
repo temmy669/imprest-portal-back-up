@@ -12,6 +12,7 @@ from helpers.response import CustomResponse
 from datetime import datetime
 from django.db.models import Count
 from rest_framework.pagination import PageNumberPagination
+from collections import Counter
 
 class PurchaseRequestView(APIView):
     """
@@ -43,24 +44,24 @@ class PurchaseRequestView(APIView):
             queryset = queryset.filter(store__region__area_manager=user)
             
     
-        # Get status counts from full queryset (before pagination)
-        status_counts = queryset.values('status').annotate(count=Count('id'))
-        status_count_dict = {entry['status']: entry['count'] for entry in status_counts}
-
-        # Paginate the queryset
+       # Paginate the queryset
         paginator = PageNumberPagination()
         paginated_queryset = paginator.paginate_queryset(queryset, request)
+
+        # Calculate status counts for just this page
+        status_list = [obj.status for obj in paginated_queryset]
+        status_count_dict = dict(Counter(status_list))
 
         # Serialize paginated data
         serializer = PurchaseRequestSerializer(paginated_queryset, many=True)
 
         # Build custom response data
         response_data = {
-            "count": paginator.page.paginator.count,
+            "count": paginator.page.paginator.count,  # total count (all pages)
             "next": paginator.get_next_link(),
             "previous": paginator.get_previous_link(),
             "results": serializer.data,
-            "status_counts": status_count_dict,
+            "status_counts": status_count_dict,       # counts only for current page
         }
 
         return CustomResponse(True, "Filtered purchase requests retrieved", 200, response_data)
@@ -122,6 +123,8 @@ class ApprovePurchaseRequestView(APIView):
         purchase_request.updated_by = request.user
         purchase_request.status = 'approved'
         purchase_request.voucher_id = f"PV-000{purchase_request.id}-{purchase_request.created_at.strftime('%Y-%m-%d')}"
+        purchase_request.area_manager = request.user
+        purchase_request.area_manager_approved_at = timezone.now()
         purchase_request.save()
         
         purchase_request_items = purchase_request.items.all()
@@ -163,12 +166,16 @@ class ApprovePurchaseRequestItemView(APIView):
         # Check if any item is declined
         if any(i.status == 'declined' for i in items):
             pr.status = 'declined'
+            pr.area_manager = request.user
+            pr.area_manager_declined_at = timezone.now()
             pr.save(user=request.user)
             
          # Check if all items are approved
         elif all(i.status == 'approved' for i in items):
             pr.status = 'approved'
             pr.voucher_id = f"PV-000{pr.id}-{pr.created_at.strftime('%Y-%m-%d')}"
+            pr.area_manager = request.user
+            pr.area_manager_approved_at = timezone.now()
             pr.save(user=request.user)
 
         return CustomResponse(True,
@@ -202,9 +209,14 @@ class DeclinePurchaseRequestView(APIView):
             )
 
         pr.status = 'declined'
-        pr.save(user=request.user)
+        pr.area_manager = request.user
+        pr.area_manager_declined_at = timezone.now()
+        pr.save()
         
-       
+        # Update all items to declined
+        purchase_request_items = pr.items.all()
+        purchase_request_items.update(status='approved')
+        
 
         # Create decline comment
         Comment.objects.create(
@@ -258,7 +270,9 @@ class DeclinePurchaseRequestItemView(APIView):
         elif all(item.status != 'pending' for item in items):
             print("okay")
             pr.status = 'declined'
-            pr.save(user=request.user)
+            pr.area_manager = request.user
+            pr.area_manager_declined_at = timezone.now()
+            pr.save()
 
         # Save comment (if supported)
         Comment.objects.create(

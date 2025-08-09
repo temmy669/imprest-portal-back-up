@@ -17,10 +17,10 @@ def send_approval_notification(purchase_request):
         'requester_name': requester.get_full_name(),
         'store_name': purchase_request.store.name,
         'store_code': purchase_request.store.code,
-        'approvedby_name': purchase_request.updated_by.get_full_name(),
+        'approvedby_name': purchase_request.area_manager.get_full_name(),
         'total_amount': f"₦{purchase_request.total_amount:,.2f}",
         'items': purchase_request.items.all(),
-        'approval_date': purchase_request.updated_at.strftime("%b %d, %Y %I:%M %p"),
+        'approval_date': purchase_request.area_manager_approved_at.strftime("%b %d, %Y %I:%M %p"),
         'status': purchase_request.get_status_display(),
         'voucher_id': getattr(purchase_request, 'voucher_id'),
         'request_date': purchase_request.created_at.strftime("%b %d, %Y %I:%M %p"),
@@ -49,16 +49,16 @@ def send_rejection_notification(purchase_request):
     requester = User.objects.get(id=purchase_request.requester_id)
     
     items = purchase_request.items.all()
-    comments =  Comment.objects.filter(user=purchase_request.updated_by, request=purchase_request).order_by('-created_at').first()
+    comments =  Comment.objects.filter(user=purchase_request.area_manager, request=purchase_request).order_by('-created_at').first()
     
     context = {
         'request_id': f"PR-{purchase_request.id:04d}",
         'requester_name': requester.get_full_name(),
         'voucher_id': getattr(purchase_request, 'voucher_id'),
-        'rejector_name': purchase_request.updated_by.get_full_name(),
+        'rejector_name': purchase_request.area_manager.get_full_name(),
         'rejection_reason': comments.text if comments else "No reason provided.",
         'items': items, 
-        'rejection_date': purchase_request.updated_at.strftime("%b %d, %Y %I:%M %p"),
+        'rejection_date': purchase_request.area_manager_declined_at.strftime("%b %d, %Y %I:%M %p"),
         'company_name': settings.COMPANY_NAME,
         'store_name': purchase_request.store.name,
         'total_amount': f"₦{purchase_request.total_amount:,.2f}",

@@ -55,7 +55,7 @@ def custom_exception_handler(exc, context):
         )
     if isinstance(exc, AuthenticationFailed):
         return Response(
-            {"status": False,  "msg": "Session has expired", "status_code": status.HTTP_410_GONE},
+            {"status": False,  "msg": "Session has expired" if 'user is inactive' not in str(exc.detail).lower() else "Account has been deactivated, chat admin up make e reactivate you.", "status_code": status.HTTP_410_GONE},
 
         )
 
