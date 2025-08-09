@@ -49,7 +49,7 @@ class PurchaseRequestView(APIView):
         paginated_queryset = paginator.paginate_queryset(queryset, request)
 
         # Calculate status counts for just this page
-        status_list = [obj.status for obj in paginated_queryset]
+        status_list = [obj.status for obj in (paginated_queryset or [])]
         status_count_dict = dict(Counter(status_list))
 
         # Serialize paginated data
@@ -290,13 +290,13 @@ class DeclinePurchaseRequestItemView(APIView):
             200
         )
         
+from collections import Counter
+
 class SearchPurchaseRequestView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
     permission_classes = [IsAuthenticated, ViewPurchaseRequest]
 
-    @extend_schema(
-        summary="Search purchase requests",
-    )
+    @extend_schema(summary="Search purchase requests")
     def get(self, request):
         """
         Search purchase requests by request ID (e.g. 'PR-0027')
@@ -316,13 +316,13 @@ class SearchPurchaseRequestView(APIView):
         else:
             return CustomResponse(False, "Only PR-XXXX search is supported", 400)
 
-        # Get status counts from full queryset (before pagination)
-        status_counts = queryset.values('status').annotate(count=Count('id'))
-        status_count_dict = {entry['status']: entry['count'] for entry in status_counts}
-
-        # Paginate the queryset
+        # Paginate queryset
         paginator = PageNumberPagination()
         paginated_queryset = paginator.paginate_queryset(queryset, request)
+
+        # Status counts for paginated results only
+        status_list = [obj.status for obj in (paginated_queryset or [])]
+        status_count_dict = dict(Counter(status_list))
 
         # Serialize paginated data
         serializer = PurchaseRequestSerializer(paginated_queryset, many=True)
@@ -333,11 +333,14 @@ class SearchPurchaseRequestView(APIView):
             "next": paginator.get_next_link(),
             "previous": paginator.get_previous_link(),
             "results": serializer.data,
-            "status_counts": status_count_dict,
+            "status_counts": status_count_dict
         }
 
         return CustomResponse(True, "Filtered purchase requests retrieved", 200, response_data)
 
+
+from collections import Counter
+from datetime import datetime
 
 class DateRangeFilterView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
@@ -368,13 +371,13 @@ class DateRangeFilterView(APIView):
             created_at__date__lte=end_date.date()
         )
 
-        # Get status counts (from full, unpaginated queryset)
-        status_counts = queryset.values('status').annotate(count=Count('id'))
-        status_count_dict = {entry['status']: entry['count'] for entry in status_counts}
-
-        # Paginate the queryset
+        # Paginate queryset
         paginator = PageNumberPagination()
         paginated_queryset = paginator.paginate_queryset(queryset, request)
+
+        # Status counts for paginated results only
+        status_list = [obj.status for obj in (paginated_queryset or [])]
+        status_count_dict = dict(Counter(status_list))
 
         # Serialize paginated data
         serializer = PurchaseRequestSerializer(paginated_queryset, many=True)

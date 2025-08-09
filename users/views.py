@@ -32,6 +32,8 @@ from rest_framework.permissions import IsAuthenticated
 from .auth import JWTAuthenticationFromCookie
 from django.http import HttpResponseRedirect
 from rest_framework.pagination import PageNumberPagination
+from collections import Counter
+
  
 
 @extend_schema(
@@ -227,21 +229,25 @@ class UserView(APIView):
     
     Returns a list of all users with their details.
     """
+    
     def get(self, request):
         users = User.objects.all()
-        
-         # Count active and inactive users
-        active_count = users.filter(is_active=True).count()
-        inactive_count = users.filter(is_active=False).count()
-
 
         paginator = PageNumberPagination()
         paginated_users = paginator.paginate_queryset(users, request)
 
+        # Count active/inactive for paginated results only
+        if paginated_users is not None:
+            active_count = sum(1 for u in paginated_users if u.is_active)
+            inactive_count = sum(1 for u in paginated_users if not u.is_active)
+        else:
+            active_count = 0
+            inactive_count = 0
+
         serializer = UserSerializer(paginated_users, many=True)
 
         response_data = {
-            "count": paginator.page.paginator.count,
+            "count": paginator.page.paginator.count,  # total in DB
             "next": paginator.get_next_link(),
             "previous": paginator.get_previous_link(),
             "results": serializer.data,
@@ -285,6 +291,7 @@ class UserView(APIView):
 class SearchUserView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
     permission_classes = [IsAuthenticated, ManageUsers]
+
     def get(self, request):
         search_query = request.query_params.get('q', '').strip()
         if not search_query:
@@ -295,25 +302,27 @@ class SearchUserView(APIView):
             Q(last_name__icontains=search_query) |
             Q(email__icontains=search_query)
         )
-        
-         # Count active and inactive users
-        active_count = users.filter(is_active=True).count()
-        inactive_count = users.filter(is_active=False).count()
-
 
         paginator = PageNumberPagination()
         paginated_users = paginator.paginate_queryset(users, request)
 
+        # Count active/inactive for paginated results only
+        if paginated_users is not None:
+            active_count = sum(1 for u in paginated_users if u.is_active)
+            inactive_count = sum(1 for u in paginated_users if not u.is_active)
+        else:
+            active_count = 0
+            inactive_count = 0
+
         serializer = UserSerializer(paginated_users, many=True)
 
         response_data = {
-            "count": paginator.page.paginator.count,
+            "count": paginator.page.paginator.count,  # total in DB
             "next": paginator.get_next_link(),
             "previous": paginator.get_previous_link(),
             "results": serializer.data,
             "active": active_count,
-            "inactive": inactive_count,
-            
+            "inactive": inactive_count
         }
 
         return CustomResponse(True, "Search successful", 200, response_data)

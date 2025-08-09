@@ -17,9 +17,9 @@ class PurchaseRequest(models.Model):
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     created_at = models.DateTimeField(auto_now_add=True)
-    area_manager_approved_at = models.DateTimeField(default=timezone.now)
-    area_manager_declined_at = models.DateTimeField(default=timezone.now)
-    internal_control_approved_at = models.DateTimeField(default=timezone.now)
+    area_manager_approved_at = models.DateTimeField(null=True, blank=True)
+    area_manager_declined_at = models.DateTimeField(null=True, blank=True)
+    internal_control_approved_at = models.DateTimeField(null=True, blank=True)
     comment = models.TextField(blank=True, null=True)
     voucher_id = models.CharField(max_length=100, default='not issued', blank=True, null=True)
     # NEW: Tracking who made which decision
