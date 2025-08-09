@@ -1,3 +1,4 @@
+from helpers.exceptions import CustomValidationException
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework.request import Request
 from rest_framework_simplejwt.exceptions import TokenError
@@ -17,6 +18,9 @@ class JWTAuthenticationFromCookie(JWTAuthentication):
            
         try:
             validated_token = self.get_validated_token(raw_token)
+            user = self.get_user(validated_token)
+            if not  user.is_active:
+                raise CustomValidationException("Your account is not active. Please contact your administrator.")
             return self.get_user(validated_token), validated_token
         except TokenError as e:
             raise AuthenticationFailed(f'Invalid token: {str(e)}')

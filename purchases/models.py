@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from stores.models import Store
 from users.models import User
+from django.utils import timezone
 
 STATUS_CHOICES = [
         ('pending', 'Pending'),
@@ -16,19 +17,29 @@ class PurchaseRequest(models.Model):
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    area_manager_approved_at = models.DateTimeField(default=timezone.now)
+    area_manager_declined_at = models.DateTimeField(default=timezone.now)
+    internal_control_approved_at = models.DateTimeField(default=timezone.now)
     comment = models.TextField(blank=True, null=True)
     voucher_id = models.CharField(max_length=100, default='not issued', blank=True, null=True)
-    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='updated_requests')
-
+    # NEW: Tracking who made which decision
+    area_manager = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='area_manager_actions'
+    )
+    internal_control = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='internal_control_actions'
+    )
     class Meta:
         ordering = ['-created_at']
-    
-    def save(self, *args, **kwargs):
-        user = kwargs.pop('user', None)
-        if user:
-            self.updated_by = user
-        super().save(*args, **kwargs)
+
 
 
     def __str__(self):
