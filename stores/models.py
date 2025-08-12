@@ -27,6 +27,13 @@ class Store(models.Model):
     blank=True,
     related_name='managed_store'  # no clash with assigned_stores
 )
+    area_manager = models.ForeignKey(
+        'users.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='area_manager_stores'
+    )
     is_active = models.BooleanField(default=True)
 
     class Meta:

@@ -120,7 +120,6 @@ class ApprovePurchaseRequestView(APIView):
             return CustomResponse(False, 'Item is already approved.', 400)
 
         # Approve the request
-        purchase_request.updated_by = request.user
         purchase_request.status = 'approved'
         purchase_request.voucher_id = f"PV-000{purchase_request.id}-{purchase_request.created_at.strftime('%Y-%m-%d')}"
         purchase_request.area_manager = request.user

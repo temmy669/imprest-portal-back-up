@@ -1,0 +1,16 @@
+Purchase Request Created
+========================
+
+Dear {{ area_manager_name }},
+
+A new purchase request {{ request_id }} has been created and assigned to you for review.
+
+Request Details:
+----------------
+Store: {{ store_name }} ({{ store_code }})
+Total Amount: {{ total_amount }}
+Request Date: {{ request_date }}
+Status: {{ status }}
+
+This is an automated notification. Please do not reply.
+© {% now "Y" %} {{ company_name }}
