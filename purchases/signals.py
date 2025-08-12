@@ -1,7 +1,7 @@
-from django.db.models.signals import pre_save
+from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
 from .models import PurchaseRequest
-from utils.email_utils import send_approval_notification, send_rejection_notification
+from utils.email_utils import send_approval_notification, send_rejection_notification, send_creation_notification
 
 @receiver(pre_save, sender=PurchaseRequest)
 def handle_purchase_request_status_change(sender, instance, **kwargs):
@@ -18,3 +18,8 @@ def handle_purchase_request_status_change(sender, instance, **kwargs):
             send_approval_notification(instance)
         elif instance.status == 'declined':
             send_rejection_notification(instance)
+
+@receiver(post_save, sender=PurchaseRequest)
+def handle_purchase_request_creation(sender, instance, created, **kwargs):
+    if created:
+        send_creation_notification(instance)

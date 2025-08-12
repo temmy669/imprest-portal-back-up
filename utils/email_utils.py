@@ -77,3 +77,34 @@ def send_rejection_notification(purchase_request):
         recipient_list=[requester.email],
         html_message=html_message
     )
+    
+def send_creation_notification(purchase_request):
+    """
+    Sends creation notification to requester with request details
+    """
+    #get the store area manager for the purchase request
+    area_manager = purchase_request.store.area_manager
+    
+    context = {
+        'request_id': f"PR-{purchase_request.id:04d}",
+        'area_manager_name': area_manager.get_full_name(),
+        'store_name': purchase_request.store.name,
+        'store_code': purchase_request.store.code,
+        'total_amount': f"₦{purchase_request.total_amount:,.2f}",
+        'request_date': purchase_request.created_at.strftime("%b %d, %Y %I:%M %p"),
+        'status': purchase_request.get_status_display(),
+        'company_name': settings.COMPANY_NAME
+    }
+
+    html_message = render_to_string('creation.html', context)
+    plain_message = strip_tags(html_message)
+    
+    send_mail(
+        subject=f"Purchase Request Created - {context['request_id']}",
+        message=plain_message,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        #send email to area manager of request store
+         
+        recipient_list=[purchase_request.store.area_manager.email],
+        html_message=html_message
+    )

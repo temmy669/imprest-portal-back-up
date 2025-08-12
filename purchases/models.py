@@ -22,6 +22,7 @@ class PurchaseRequest(models.Model):
     internal_control_approved_at = models.DateTimeField(null=True, blank=True)
     comment = models.TextField(blank=True, null=True)
     voucher_id = models.CharField(max_length=100, default='not issued', blank=True, null=True)
+    created = models.BooleanField(default=True)
     # NEW: Tracking who made which decision
     area_manager = models.ForeignKey(
         User,
