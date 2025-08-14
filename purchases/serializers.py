@@ -71,3 +71,16 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
             PurchaseRequestItem.objects.create(request=request, **item_data)
         
         return request
+    
+class ApprovedPurchaseRequestSerializer(serializers.ModelSerializer):
+    """List serializer for approved purchase requests"""
+    
+    class Meta:
+        model = PurchaseRequest
+        fields = ['request_name']  # Only include request_name
+
+    def to_representation(self, instance):
+        rep = {}
+        if instance.status and instance.status.lower() == "approved":
+            rep['request_name'] = f"PR-{instance.id:04d}-{instance.total_amount:,.2f}"
+        return rep

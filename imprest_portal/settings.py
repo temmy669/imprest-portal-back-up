@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'stores.apps.StoresConfig',
     'purchases.apps.PurchasesConfig',
     'helpers.apps.HelpersConfig',
+    'reimbursements.apps.ReimbursementsConfig',
 ]
 
 AUTH_USER_MODEL = 'users.User'

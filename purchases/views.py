@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
 from .models import *
-from .serializers import PurchaseRequestSerializer
+from .serializers import *
 from utils.permissions import *
 from users.auth import JWTAuthenticationFromCookie
 from drf_spectacular.utils import extend_schema
@@ -101,6 +101,21 @@ class PurchaseRequestView(APIView):
             return CustomResponse(True, serializer.data, 200)
         return CustomResponse(False, serializer.errors, 400)
     
+
+class ListApprovedPurchaseRequestView(APIView):
+    """
+    List all approved purchase requests for the current user.
+    """
+    authentication_classes = [JWTAuthenticationFromCookie]
+    permission_classes = [IsAuthenticated, ViewPurchaseRequest]
+
+    @extend_schema(summary="List approved purchase requests")
+    def get(self, request):
+        queryset = PurchaseRequest.objects.filter(status='approved', requester=request.user)
+        serializer = ApprovedPurchaseRequestSerializer(queryset, many=True)
+
+        return CustomResponse(True, "Approved purchase requests retrieved", 200, serializer.data)
+
     
 class ApprovePurchaseRequestView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
