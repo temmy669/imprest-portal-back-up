@@ -92,3 +92,16 @@ class ApproveOver5000(BaseRolePermission):
 
 class ViewAnalytics(BaseRolePermission):
     codename = 'view_analytics'
+
+#ViewReimbursementRequest, SubmitReimbursementRequest, ChangeReimbursementRequest
+class ViewReimbursementRequest(BaseRolePermission):
+    codename = 'view_reimbursement_request'
+    
+class SubmitReimbursementRequest(BaseRolePermission):
+    codename = 'submit_reimbursement_request'
+    
+class ApproveReimbursementRequest(BaseRolePermission):
+    codename = 'can_approve_request'
+    
+class DeclineReimbursementRequest(BaseRolePermission):
+    codename = 'can_decline_request'
