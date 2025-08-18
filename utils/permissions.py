@@ -54,7 +54,7 @@ class BaseRolePermission(BasePermission):
         if getattr(user, 'is_superuser', False) or getattr(user.role, 'name', None) == 'Admin':
             return True
 
-        if isinstance(obj, PurchaseRequest, Reimbu):
+        if isinstance(obj, PurchaseRequest):
             if self.codename == 'change_purchase_request':
                 return obj.requester == user
             elif self.codename in ['can_approve_request', 'can_decline_request', 'view_purchase_request']:
