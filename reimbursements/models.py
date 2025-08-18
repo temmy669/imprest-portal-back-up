@@ -11,7 +11,6 @@ STATUS_CHOICES = [
     ]
 
 class Reimbursement(models.Model):
-   
     requester = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reimbursements')
     store = models.ForeignKey(Store, on_delete=models.CASCADE)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)

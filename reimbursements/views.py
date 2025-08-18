@@ -3,15 +3,16 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
-from .models import Reimbursement
+from .models import *
 from .serializers import *
-from utils.permissions import ViewReimbursementRequest, SubmitReimbursementRequest
+from utils.permissions import ViewReimbursementRequest, SubmitReimbursementRequest, ApproveReimbursementRequest, DeclineReimbursementRequest
 from helpers.response import CustomResponse
 from users.auth import JWTAuthenticationFromCookie
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.core.files.storage import FileSystemStorage
 import os
 from django.conf import settings
+from django.utils import timezone
 
 
 class ReimbursementRequestView(APIView):
@@ -112,7 +113,7 @@ class UploadReceiptView(APIView):
             200,
             {
                 "item_id": item.id,
-                "reimbursement_id": item.reimbursement,
+                "reimbursement_id": item.reimbursement.id,
                 "requires_receipt": item.requires_receipt,
                 "receipt_url": request.build_absolute_uri(item.receipt.url),
             }
@@ -165,3 +166,191 @@ class SubmitReimbursementView(APIView):
 
         data = ReimbursementSerializer(reimbursement).data
         return CustomResponse(True, "Reimbursement submitted for approval", 200, data)
+    
+    
+class ApproveReimbursementView(APIView):
+    
+    # Approve a reimbursement request and its items
+    def post(self, request, pk):
+        reimbursement = get_object_or_404(Reimbursement, pk=pk)
+        if reimbursement.status != 'pending':
+            return CustomResponse(False, "Reimbursement is not pending", 400)
+
+        reimbursement.status = 'approved'
+        reimbursement_items = reimbursement.items.all()
+
+        # Approve all related items
+        reimbursement_items.update(status='approved')
+
+        if request.user.role.name == 'Area Manager':
+            reimbursement.area_manager = request.user
+            reimbursement.area_manager_approved_at = timezone.now()
+        elif request.user.role.name == 'Internal Control' and reimbursement.area_manager:
+            reimbursement.internal_control = request.user
+            reimbursement.internal_control_approved_at = timezone.now()
+        reimbursement.save()
+        
+        name = ""
+        if request.user.role.name == 'Area Manager':
+            name = "Area Manager"
+            
+        elif request.user.role.name == 'Internal Control':
+            name = "Internal Control"
+        
+        message = f"Reimbursement approved by {name} successfully"
+
+        return CustomResponse(True, message, 200)
+    
+
+class ApproveReimbursementItemView(APIView):
+    authentication_classes = [JWTAuthenticationFromCookie]
+    permission_classes = [IsAuthenticated, ApproveReimbursementRequest]
+    
+    #Approve items in a reimbursement request
+    def post(self, request, pk, item_id):
+        re = get_object_or_404(Reimbursement, pk=pk)
+        item = get_object_or_404(ReimbursementItem, pk=item_id, request=re)
+
+        # Object-level permission check
+        self.check_object_permissions(request, re)
+
+        if item.status == 'approved':
+            return CustomResponse(False, 'Item is already approved.', 400)
+        
+        item.status = 'approved'
+        item.save()
+
+        items = re.items.all()
+
+
+        # Check if any item is declined
+        if any(i.status == 'declined' for i in items):
+            re.status = 'declined'
+            if request.user.role.name == "Area Manager":
+                re.area_manager = request.user
+                re.area_manager_declined_at = timezone.now()
+            elif request.user.role.name == "Internal Control":
+                re.internal_control = request.user
+                re.internal_control_declined_at = timezone.now()
+            re.save()
+            
+         # Check if all items are approved
+        elif all(i.status == 'approved' for i in items):
+            re.status = 'approved'
+            if request.user.role.name == "Area Manager":
+                re.area_manager = request.user
+                re.area_manager_approved_at = timezone.now()
+            elif request.user.role.name == "Internal Control":
+                re.internal_control = request.user
+                re.internal_control_approved_at = timezone.now()
+            re.save()
+
+        return CustomResponse(True,
+            {
+                'status': 'approved',
+                'item_id': item.id
+            },
+            200
+        )
+        
+        
+class DeclineReimbursementRequest(APIView):
+    authentication_classes = [JWTAuthenticationFromCookie]
+    permission_classes = [IsAuthenticated, DeclineReimbursementRequest]
+    
+    def post(self, request, pk):
+        re = get_object_or_404(Reimbursement, pk=pk)
+
+        self.check_object_permissions(request, re)
+
+        comment_text = request.data.get('comment', '').strip()
+        if not comment_text:
+            return CustomResponse(False, 'Comment is required when declining', 400)
+
+        if request.user.role.name == "Internal Control":
+            # Send back to Area Manager as pending
+            re.status = "pending"
+            re.internal_control = request.user
+            re.internal_control_declined_at = timezone.now()
+        elif request.user.role.name == "Area Manager":
+            # Final decline
+            re.status = "declined"
+            re.area_manager = request.user
+            re.area_manager_declined_at = timezone.now()
+
+            # Update all items to declined (only final decline)
+            re.items.update(status="declined")
+
+        re.save()
+
+        # Create decline comment
+        ReimbursementComment.objects.create(
+            reimbursement=re,
+            author=request.user,
+            text=comment_text
+        )
+
+        return CustomResponse(
+            True,
+            {"status": re.status, "comment": comment_text},
+            200
+        )
+
+
+class DeclineReimbursementItemView(APIView):
+    authentication_classes = [JWTAuthenticationFromCookie]
+    permission_classes = [IsAuthenticated, DeclineReimbursementRequest]
+    
+    def post(self, request, pk, item_id):
+        re = get_object_or_404(Reimbursement, pk=pk)
+        item = get_object_or_404(ReimbursementItem, pk=item_id, reimbursement=re)
+
+        self.check_object_permissions(request, re)
+
+        comment_text = request.data.get('comment', '').strip()
+        if not comment_text:
+            return CustomResponse(False, 'Comment is required when declining', 400)
+
+        if item.status == 'declined':
+            return CustomResponse(False, "Item is already declined", 400)
+
+        # Decline this item
+        item.status = 'declined'
+        item.save()
+
+        items = re.items.all()
+
+        if any(i.status == 'pending' for i in items):
+            # Some items still pending → request remains pending
+            re.status = "pending"
+        elif all(i.status != 'pending' for i in items):
+            # No more pending items
+            if request.user.role.name == "Internal Control":
+                # IC decline → send back as pending
+                re.status = "pending"
+                re.internal_control = request.user
+                re.internal_control_declined_at = timezone.now()
+            elif request.user.role.name == "Area Manager":
+                # Final decline
+                re.status = "declined"
+                re.area_manager = request.user
+                re.area_manager_declined_at = timezone.now()
+
+        re.save()
+
+        # Save comment
+        ReimbursementComment.objects.create(
+            reimbursement=re,
+            author=request.user,
+            text=comment_text
+        )
+
+        return CustomResponse(
+            True,
+            {
+                "status": re.status,
+                "item_id": item.id,
+                "comment": comment_text
+            },
+            200
+        )
