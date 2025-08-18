@@ -211,7 +211,7 @@ class ApproveReimbursementItemView(APIView):
     #Approve items in a reimbursement request
     def post(self, request, pk, item_id):
         re = get_object_or_404(Reimbursement, pk=pk)
-        item = get_object_or_404(ReimbursementItem, pk=item_id, request=re)
+        item = get_object_or_404(ReimbursementItem, pk=item_id, reimbursement=re)
 
         # Object-level permission check
         self.check_object_permissions(request, re)
@@ -256,7 +256,7 @@ class ApproveReimbursementItemView(APIView):
         )
         
         
-class DeclineReimbursementRequest(APIView):
+class DeclineReimbursementView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
     permission_classes = [IsAuthenticated, DeclineReimbursementRequest]
     

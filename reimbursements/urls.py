@@ -5,7 +5,7 @@ from .views import (
     SubmitReimbursementView,
     ApproveReimbursementView,
     ApproveReimbursementItemView,
-    DeclineReimbursementRequest,
+    DeclineReimbursementView,
     DeclineReimbursementItemView,
 )
 from django.conf import settings
@@ -30,7 +30,7 @@ urlpatterns = [
     path('reimbursements/<int:pk>/items/<int:item_id>/approve/', ApproveReimbursementItemView.as_view(), name='approve-reimbursement-item'),
 
     # Decline entire reimbursement request
-    path('reimbursements/<int:pk>/decline/', DeclineReimbursementRequest.as_view(), name='decline-reimbursement'),
+    path('reimbursements/<int:pk>/decline/', DeclineReimbursementView.as_view(), name='decline-reimbursement'),
 
     # Decline individual reimbursement item
     path('reimbursements/<int:pk>/items/<int:item_id>/decline/', DeclineReimbursementItemView.as_view(), name='decline-reimbursement-item'),
