@@ -82,5 +82,5 @@ class ApprovedPurchaseRequestSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         rep = {}
         if instance.status and instance.status.lower() == "approved":
-            rep['request_name'] = f"PR-{instance.id:04d}-{instance.total_amount:,.2f}"
+            rep['request_name'] = f"PR-{instance.id:04d}-{instance.total_amount:.2f}"
         return rep
