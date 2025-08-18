@@ -169,6 +169,8 @@ class SubmitReimbursementView(APIView):
     
     
 class ApproveReimbursementView(APIView):
+    authentication_classes = [JWTAuthenticationFromCookie]
+    permission_classes = [IsAuthenticated, ApproveReimbursementRequest]
     
     # Approve a reimbursement request and its items
     def post(self, request, pk):

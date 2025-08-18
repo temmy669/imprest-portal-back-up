@@ -38,6 +38,7 @@ class PurchaseRequest(models.Model):
 
     def __str__(self):
         return f"PR-{self.id} - {self.status} by {self.requester.first_name} {self.requester.last_name}"
+   
 
 class PurchaseRequestItem(models.Model):
     request = models.ForeignKey(PurchaseRequest, on_delete=models.CASCADE, related_name='items')
