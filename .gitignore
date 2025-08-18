@@ -60,3 +60,6 @@ todo.txt
 media/
 *.zip
 .*DS_Store
+
+#dirs
+receipts/

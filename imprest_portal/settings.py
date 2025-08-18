@@ -140,6 +140,19 @@ SESSION_COOKIE_HTTPONLY = True  # Prevents client-side scripts from accessing co
 # Optional: Clear expired sessions
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 
+if ENVIRONMENT == "production":
+    # Cloudinary
+    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+    CLOUDINARY_STORAGE = {
+        'CLOUD_NAME': config('CLOUDINARY_CLOUD_NAME'),
+        'API_KEY': config('CLOUDINARY_API_KEY'),
+        'API_SECRET': config('CLOUDINARY_API_SECRET'),
+    }
+else:
+    # Local
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
 DB_ENGINE = config('DB_ENGINE', default='postgresql')
 USE_SSL = config('DB_USE_SSL', default='False', cast=bool)
 
