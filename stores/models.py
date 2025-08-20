@@ -4,14 +4,6 @@ from django.db import models
 
 class Region(models.Model):
     name = models.CharField(max_length=100, unique=True)
-    area_manager = models.ForeignKey(
-        'users.User',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='managed_regions'
-    )
-
 
     def __str__(self):
         return self.name
@@ -27,6 +19,7 @@ class Store(models.Model):
     blank=True,
     related_name='managed_store'  # no clash with assigned_stores
 )
+    
     area_manager = models.ForeignKey(
         'users.User',
         on_delete=models.SET_NULL,
@@ -34,6 +27,7 @@ class Store(models.Model):
         blank=True,
         related_name='area_manager_stores'
     )
+    
     is_active = models.BooleanField(default=True)
 
     class Meta:
