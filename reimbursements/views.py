@@ -64,12 +64,12 @@ class ReimbursementRequestView(APIView):
         # Date range filter
         if start_date:
             try:
-                queryset = queryset.filter(created_at__date__gte=datetime.strptime(start_date, "%d/%m/%Y").date())
+                queryset = queryset.filter(created_at__date__gte=datetime.strptime(start_date, "%Y/%m/%d").date())
             except ValueError:
                 pass
         if end_date:
             try:
-                queryset = queryset.filter(created_at__date__lte=datetime.strptime(end_date, "%d/%m/%Y").date())
+                queryset = queryset.filter(created_at__date__lte=datetime.strptime(end_date, "%Y/%m/%d").date())
             except ValueError:
                 pass
 
