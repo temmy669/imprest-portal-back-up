@@ -54,21 +54,41 @@ class BaseRolePermission(BasePermission):
         if getattr(user, 'is_superuser', False) or getattr(user.role, 'name', None) == 'Admin':
             return True
 
+        # --- PurchaseRequest logic ---
         if isinstance(obj, PurchaseRequest):
             if self.codename == 'change_purchase_request':
                 return obj.requester == user
-            elif self.codename in ['can_approve_request', 'can_decline_request', 'view_purchase_request', 'can_decline_request']:
+            elif self.codename in [
+                'approve_purchase_request',
+                'decline_purchase_request',
+                'view_purchase_request',
+            ]:
                 return (
-                    getattr(user.role, 'name', '') == 'Area Manager' and 
+                    getattr(user.role, 'name', '') == 'Area Manager' and
+                    obj.store in user.assigned_stores.all()
+                )
+
+        # --- Reimbursement logic ---
+        if isinstance(obj, Reimbursement):
+            if self.codename == 'submit_reimbursement_request':
+                return obj.requester == user
+            elif self.codename in [
+                'approve_reimbursement_request',
+                'decline_reimbursement_request',
+                'view_reimbursement_request',
+            ]:
+                return (
+                    getattr(user.role, 'name', '') == 'Area Manager' and
                     obj.store in user.assigned_stores.all()
                 )
 
         return False
 
+
 # Specific permission classes for each use case
 class SubmitPurchaseRequest(BaseRolePermission):
     codename = 'submit_purchase_request'
-    
+
 class ViewPurchaseRequest(BaseRolePermission):
     codename = 'view_purchase_request'
     object_permission = True
@@ -78,11 +98,11 @@ class ChangePurchaseRequest(BaseRolePermission):
     object_permission = True
 
 class ApprovePurchaseRequest(BaseRolePermission):
-    codename = 'can_approve_request'
+    codename = 'approve_purchase_request'   # renamed for clarity
     object_permission = True
 
 class DeclinePurchaseRequest(BaseRolePermission):
-    codename = 'can_decline_request'
+    codename = 'decline_purchase_request'   # renamed for clarity
     object_permission = True
 
 class ManageUsers(BaseRolePermission):
@@ -95,16 +115,17 @@ class ViewAnalytics(BaseRolePermission):
     codename = 'view_analytics'
 
 #ViewReimbursementRequest, SubmitReimbursementRequest, ChangeReimbursementRequest
-class ViewReimbursementRequest(BaseRolePermission):
-    codename = 'view_reimbursement_request'
-    
 class SubmitReimbursementRequest(BaseRolePermission):
     codename = 'submit_reimbursement_request'
-    
-class ApproveReimbursementRequest(BaseRolePermission):
-    codename = 'can_approve_request'
+
+class ViewReimbursementRequest(BaseRolePermission):
+    codename = 'view_reimbursement_request'
     object_permission = True
-    
+
+class ApproveReimbursementRequest(BaseRolePermission):
+    codename = 'approve_reimbursement_request'   # distinct from purchase
+    object_permission = True
+
 class DeclineReimbursementRequest(BaseRolePermission):
-    codename = 'can_decline_request'
+    codename = 'decline_reimbursement_request'   # distinct from purchase
     object_permission = True

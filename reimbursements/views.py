@@ -15,6 +15,11 @@ from django.conf import settings
 from django.utils import timezone
 
 
+from django.db.models import Q
+from rest_framework.pagination import PageNumberPagination
+from collections import Counter
+from datetime import datetime
+
 class ReimbursementRequestView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
 
@@ -29,17 +34,78 @@ class ReimbursementRequestView(APIView):
         user = request.user
         queryset = Reimbursement.objects.all()
 
+        # Role-based restrictions
         if user.role.name == 'Restaurant Manager':
             queryset = queryset.filter(requester=user)
         elif user.role.name == 'Area Manager':
-            queryset = queryset.filter(store__region__area_manager=user)
+            queryset = queryset.filter(store__in=user.assigned_stores.all())
+        elif user.role.name == 'Internal Control':
+            queryset = queryset 
 
+        # Filters from query params
+        area_manager_id = request.query_params.get("area_manager")
+        store_ids = request.query_params.getlist("stores")  
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+        status = request.query_params.get("status")
+        search = request.query_params.get("search")
+        search_query = request.query_params.get("q", "").strip()
+
+
+        # Area Manager filter
+        if area_manager_id:
+            queryset = queryset.filter(store__assigned_users__id=area_manager_id, 
+                                       store__assigned_users__role__name="Area Manager")
+
+        # Store filter
+        if store_ids:
+            queryset = queryset.filter(store_id__in=store_ids)
+
+        # Date range filter
+        if start_date:
+            try:
+                queryset = queryset.filter(created_at__date__gte=datetime.strptime(start_date, "%d/%m/%Y").date())
+            except ValueError:
+                pass
+        if end_date:
+            try:
+                queryset = queryset.filter(created_at__date__lte=datetime.strptime(end_date, "%d/%m/%Y").date())
+            except ValueError:
+                pass
+
+        # Status filter
+        if status:
+            queryset = queryset.filter(status=status)
+
+        # Search filter (by requester name)
+        if search:
+            queryset = queryset.filter(
+                Q(requester__first_name__icontains=search) |
+                Q(requester__last_name__icontains=search) |
+                Q(requester__name__icontains=search)    |
+                Q(request)
+            )
+        
+        # Special RR-XXXX search (takes priority if provided)
+        if search_query:
+            if search_query.upper().startswith("RR-"):
+                try:
+                    request_id = int(search_query.upper().replace("RR-", ""))
+                    queryset = queryset.filter(id=request_id)
+                except ValueError:
+                    return CustomResponse(False, "Invalid request ID format. Expected RR-XXXX", 400)
+            else:
+                return CustomResponse(False, "Only RR-XXXX search is supported in 'q'", 400)
+
+
+        # Pagination
         paginator = PageNumberPagination()
         paginated_queryset = paginator.paginate_queryset(queryset, request)
 
-        # Status counts for ALL matching results (not just current page)
-        status_count_dict = dict(Counter(queryset.values_list('status', flat=True)))
-
+        # Calculate status counts for just this page
+        status_list = [obj.status for obj in (paginated_queryset or [])]
+        status_count_dict = dict(Counter(status_list))
+        
         serializer = ReimbursementSerializer(paginated_queryset, many=True)
 
         return CustomResponse(
@@ -356,3 +422,4 @@ class DeclineReimbursementItemView(APIView):
             },
             200
         )
+        

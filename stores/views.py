@@ -2,7 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .models import Region, Store
-from .serializers import RegionSerializer, StoreSerializer, StoreRegionSerializer
+from .serializers import RegionSerializer, StoreSerializer, StoreRegionSerializer, RegionAreaManagerSerializer
 from django.contrib.auth import get_user_model
 from helpers.response import CustomResponse
 from django.shortcuts import get_object_or_404
@@ -182,3 +182,9 @@ class AssignStoresToUserView(APIView):
                 },
                 status=status.HTTP_404_NOT_FOUND
             )
+            
+class ListAreaManagersByRegion(APIView):
+    def get(self, request):
+        regions = Region.objects.all()
+        serializer = RegionAreaManagerSerializer(regions, many=True)
+        return CustomResponse(True, "Regions and managers retrieved successfully", 200, serializer.data)
