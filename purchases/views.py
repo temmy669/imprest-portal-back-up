@@ -34,6 +34,7 @@ class PurchaseRequestView(APIView):
         List purchase requests (filtered by user's role)
         """
         user = request.user
+        print(user)
         queryset = PurchaseRequest.objects.all()
 
         # Restaurant Managers only see their own requests
@@ -41,7 +42,7 @@ class PurchaseRequestView(APIView):
             queryset = queryset.filter(requester=user)
         # Area Managers see requests from their stores
         elif user.role.name == 'Area Manager':
-            queryset = queryset.filter(store__region__area_manager=user)
+            queryset = queryset.filter(store__region=user.region)
             
     
        # Paginate the queryset
