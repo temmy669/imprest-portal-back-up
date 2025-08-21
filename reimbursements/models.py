@@ -43,6 +43,7 @@ class ReimbursementItem(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     receipt = models.FileField(upload_to='receipts/', null=True, blank=True)
     requires_receipt = models.BooleanField(default=False)
+    voucher_id = models.CharField(max_length=100, null=True, blank=True)
     
 
 class ReimbursementComment(models.Model):

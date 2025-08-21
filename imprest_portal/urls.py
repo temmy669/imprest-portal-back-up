@@ -23,6 +23,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, Spec
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('users.urls') ),
+    path('expense-items/', include('expenseitems.urls')),
     path('roles/', include('roles.urls')),
     path('stores/', include('stores.urls')),
     path('purchase-requests/', include('purchases.urls')),
