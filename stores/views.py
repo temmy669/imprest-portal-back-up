@@ -2,10 +2,13 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .models import Region, Store
-from .serializers import RegionSerializer, StoreSerializer, StoreRegionSerializer, RegionAreaManagerSerializer
+from .serializers import *
 from django.contrib.auth import get_user_model
 from helpers.response import CustomResponse
 from django.shortcuts import get_object_or_404
+from users.auth import JWTAuthenticationFromCookie
+from utils.permissions import ManageUsers
+from rest_framework.permissions import IsAuthenticated
 
 User = get_user_model()
 
@@ -188,3 +191,41 @@ class ListAreaManagersByRegion(APIView):
         regions = Region.objects.all()
         serializer = RegionAreaManagerSerializer(regions, many=True)
         return CustomResponse(True, "Regions and managers retrieved successfully", 200, serializer.data)
+    
+
+class StoreBudgetView(APIView):
+    authentication_classes = [JWTAuthenticationFromCookie]
+    permission_classes = [IsAuthenticated, ManageUsers]
+    
+    def get(self, request):
+        stores = Store.objects.all()
+        serializer = StoreBudgetSerializer(stores, many=True)
+        return CustomResponse(True, "Store Budgets Retrieved Successfully", 200, serializer.data)
+
+    def put(self, request, pk):
+        store = get_object_or_404(Store, pk=pk)
+        old_budget = store.budget
+
+        serializer = StoreBudgetSerializer(store, data=request.data, partial=True)
+        if serializer.is_valid():
+            updated_store = serializer.save()
+
+            # Track budget history if changed
+            new_budget = updated_store.budget
+            if old_budget != new_budget:
+                StoreBudgetHistory.objects.create(
+                    store=store,
+                    previous_budget=old_budget,
+                    new_budget=new_budget,
+                    comment=request.data.get("comment"),
+                    updated_by=request.user if request.user.is_authenticated else None
+                )
+                
+                 # Update balance if needed
+            if store.balance == 0:
+                store.balance = new_budget
+                store.save(update_fields=['balance'])
+
+            return CustomResponse(True, "Budget updated successfully", 200, serializer.data)
+
+        return CustomResponse(False, serializer.errors, 400)

@@ -1,6 +1,6 @@
 # stores/serializers.py
 from rest_framework import serializers
-from .models import Region, Store
+from .models import Region, Store, StoreBudgetHistory
 
 class RegionSerializer(serializers.ModelSerializer):
     class Meta:
@@ -11,7 +11,7 @@ class StoreSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Store
-        fields = ['id','name', 'code',]
+        fields = ['id','name', 'code']
         
 class StoreRegionSerializer(serializers.ModelSerializer):
     stores = serializers.SerializerMethodField()
@@ -45,3 +45,31 @@ class RegionAreaManagerSerializer(serializers.ModelSerializer):
             }
             for manager in managers
         ]
+        
+class StoreBudgetHistorySerializer(serializers.ModelSerializer):
+    updated_by = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StoreBudgetHistory
+        fields = ['id', 'previous_budget', 'new_budget', 'comment', 'changed_at', 'updated_by']
+
+    def get_updated_by(self, obj):
+        return f"{obj.updated_by.first_name} {obj.updated_by.last_name}" if obj.updated_by else None
+
+
+class StoreBudgetSerializer(serializers.ModelSerializer):
+    budget_history = StoreBudgetHistorySerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Store
+        fields = [
+            'id', 'code', 'name', 'region',
+            'budget', 'balance', 'updated_at',
+            'budget_history'  # nested history
+        ]
+        read_only_fields = ['updated_at', 'created_at']
+        
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        rep['region'] = instance.region.name
+        return rep
