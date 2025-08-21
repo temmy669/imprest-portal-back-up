@@ -77,10 +77,17 @@ class ApprovedPurchaseRequestSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = PurchaseRequest
-        fields = ['request_name']  # Only include request_name
+        fields = ['voucher_id']
+        read_only_fields = ['voucher_id', 'request_name']
 
     def to_representation(self, instance):
-        rep = {}
+        rep = super().to_representation(instance)
+        
+        # Only change request_name if approved
         if instance.status and instance.status.lower() == "approved":
             rep['request_name'] = f"PR-{instance.id:04d}-{instance.total_amount:.2f}"
+        else:
+            # Optional: keep original name or set it None
+            rep['request_name'] = instance.request_name
+        
         return rep
