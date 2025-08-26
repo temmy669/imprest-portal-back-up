@@ -82,8 +82,7 @@ class ReimbursementRequestView(APIView):
             queryset = queryset.filter(
                 Q(requester__first_name__icontains=search) |
                 Q(requester__last_name__icontains=search) |
-                Q(requester__name__icontains=search)  |
-                Q(request)
+                Q(requester__name__icontains=search)  
             )
         
         # Special RR-XXXX search (takes priority if provided)
