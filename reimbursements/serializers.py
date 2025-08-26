@@ -27,7 +27,13 @@ class ReimbursementItemSerializer(serializers.ModelSerializer):
             'unit_price', 'quantity', 'item_total', 'purchase_request_ref',
             'status', 'receipt', 'requires_receipt'
         ]
-        read_only_fields = ['item_total', 'requires_receipt']
+        read_only_fields = ['item_total', 'requires_receipt', 'status']
+    
+      
+    # def to_representation(self, instance):
+    #     rep = super().to_representation(instance)
+    #     if instance.internal_control_declined_at:
+    #         rep['status'] = "pending"
 
     def validate(self, attrs):
         unit_price = attrs.get('unit_price')
@@ -102,6 +108,9 @@ class ReimbursementSerializer(serializers.ModelSerializer):
         rep['request_id'] = f"RR-{instance.id:04d}"
         rep['role'] = instance.requester.role.name if instance.requester.role else None
         rep['total_amount'] = f"₦{instance.total_amount:,.2f}"
+        
+        # if instance.internal_control_declined_at:
+        #     rep['status'] = "pending"
 
         if instance.area_manager_approved_at:
             rep['area_manager_approved_by'] = f"{instance.area_manager.first_name} {instance.area_manager.last_name}" if instance.area_manager else None

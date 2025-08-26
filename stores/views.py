@@ -201,7 +201,7 @@ class StoreBudgetView(APIView):
                     updated_by=request.user if request.user.is_authenticated else None
                 )
                 
-                 # Update balance if needed
+            # Update balance if needed
             if store.balance == 0:
                 store.balance = new_budget
                 store.save(update_fields=['balance'])

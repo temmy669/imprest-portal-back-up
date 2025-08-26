@@ -40,7 +40,7 @@ class ReimbursementRequestView(APIView):
         elif user.role.name == 'Area Manager':
             queryset = queryset.filter(store__in=user.assigned_stores.all())
         elif user.role.name == 'Internal Control':
-            queryset = queryset 
+            queryset = queryset.filter(status="approved")
 
         # Filters from query params
         area_manager_id = request.query_params.get("area_manager")
@@ -54,8 +54,9 @@ class ReimbursementRequestView(APIView):
 
         # Area Manager filter
         if area_manager_id:
-            queryset = queryset.filter(store__assigned_users__id=area_manager_id, 
-                                       store__assigned_users__role__name="Area Manager")
+           queryset = queryset.filter(store__assigned_users__id=area_manager_id)
+
+                                       
 
         # Store filter
         if store_ids:
@@ -336,7 +337,7 @@ class DeclineReimbursementView(APIView):
 
         if request.user.role.name == "Internal Control":
             # Send back to Area Manager as pending
-            re.status = "pending"
+            re.status = "declined"
             re.internal_control = request.user
             re.internal_control_declined_at = timezone.now()
         elif request.user.role.name == "Area Manager":
@@ -394,7 +395,7 @@ class DeclineReimbursementItemView(APIView):
             # No more pending items
             if request.user.role.name == "Internal Control":
                 # IC decline → send back as pending
-                re.status = "pending"
+                re.status = "declined"
                 re.internal_control = request.user
                 re.internal_control_declined_at = timezone.now()
             elif request.user.role.name == "Area Manager":
