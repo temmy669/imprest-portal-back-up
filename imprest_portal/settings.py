@@ -49,11 +49,19 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    
+    
 
     # Third party apps
     'drf_spectacular',
     'rest_framework',
     'corsheaders',
+    
+     # django-allauth (fix for your error)
+    'django.contrib.sites',   # required by allauth
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
 
     # Local apps
     'users.apps.UsersConfig',
@@ -76,11 +84,12 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+     "allauth.account.middleware.AccountMiddleware",
 ]
 
 ROOT_URLCONF = 'imprest_portal.urls'
 
-
+SITE_ID=1
 
 AZURE_AD_AUTHORITY = f"https://login.microsoftonline.com/{config('AZURE_AD_TENANT_ID', default='no id')}"
 AZURE_AD_REDIRECT_URI = config('AZURE_AD_REDIRECT_URI', default='no uri set')

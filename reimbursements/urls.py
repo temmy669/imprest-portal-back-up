@@ -7,6 +7,7 @@ from .views import (
     ApproveReimbursementItemView,
     DeclineReimbursementView,
     DeclineReimbursementItemView,
+    InternalControlReimbursementView,
 )
 from django.conf import settings
 from django.conf.urls.static import static
@@ -15,6 +16,7 @@ from django.conf.urls.static import static
 urlpatterns = [
     # List, create, or update reimbursement requests
     path('reimbursements/', ReimbursementRequestView.as_view(), name='reimbursement-list-create'),
+    path('internal-control-re/', InternalControlReimbursementView.as_view(), name='internal-control-re'),
     path('reimbursements/<int:pk>/', ReimbursementRequestView.as_view(), name='reimbursement-update'),
     
     # Submit a reimbursement (requires reimbursement pk)
