@@ -158,8 +158,8 @@ class InternalControlReimbursementView(APIView):
         user = request.user
         queryset = Reimbursement.objects.all()
         
-        queryset = queryset.filter(status="approved")
-        
+        queryset = queryset.filter(area_manager_approved_at__isnull=False)
+    
         # Filters from query params
         area_manager_id = request.query_params.get("area_manager")
         store_ids = request.query_params.getlist("stores")  
@@ -329,8 +329,13 @@ class ApproveReimbursementView(APIView):
     # Approve a reimbursement request and its items
     def post(self, request, pk):
         reimbursement = get_object_or_404(Reimbursement, pk=pk)
-        if reimbursement.status != 'pending':
-            return CustomResponse(False, "Reimbursement is not pending", 400)
+        if request.user.role.name == "Area Manager":
+            if reimbursement.status != 'pending':
+                return CustomResponse(False, "Reimbursement is not pending", 400)
+        
+        elif request.user.role.name == "Internal Control":
+            if reimbursement.internal_control_status != 'pending':
+                return CustomResponse(False, "Reimbursement is not pending", 400)
 
         reimbursement.status = 'approved'
         reimbursement_items = reimbursement.items.all()
@@ -439,7 +444,7 @@ class DeclineReimbursementView(APIView):
             re.area_manager_declined_at = timezone.now()
 
             # Update all items to declined (only final decline)
-            re.items.update(status="declined")
+        re.items.update(status="declined")
 
         re.save()
 
