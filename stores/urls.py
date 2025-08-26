@@ -8,5 +8,6 @@ urlpatterns = [
     path('manager-region/', ListAreaManagersByRegion.as_view(), name='manager-region'),
     path('store-budgets/', StoreBudgetView.as_view(), name='store-budget'),
     path('update-budget/<int:pk>/', StoreBudgetView.as_view(), name='update-budget'),
+    path('add-store/', StoreBudgetView.as_view(), name='add-store'),
     path('', StoreListView.as_view(), name='store-list'),
 ]

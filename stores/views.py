@@ -9,6 +9,7 @@ from django.shortcuts import get_object_or_404
 from users.auth import JWTAuthenticationFromCookie
 from utils.permissions import ManageUsers
 from rest_framework.permissions import IsAuthenticated
+from decimal import Decimal
 
 User = get_user_model()
 
@@ -25,29 +26,12 @@ class StoreListView(APIView):
     def get(self, request):
         """
         Handles GET requests for store listing.
-        
-        Response Format:
-        [
-            {
-                "id": 1,
-                "name": "Lagos Main",
-                "code": "LMN001",
-                "region": {"id": 1, "name": "South-South"}
-            },
-            ...
-        ]
         """
         stores = Store.objects.all()
         serializer = StoreSerializer(stores, many=True)
         return CustomResponse(True, "Stores returned Successfully", data=serializer.data)
     
-    def post(self, request):
-        """Creates a new store"""
-        serializer = StoreSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return CustomResponse(True, "User added", data=serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
 
 
 class RegionListView(APIView):
@@ -63,14 +47,6 @@ class RegionListView(APIView):
         """
         Handles GET requests for region listing.
         
-        Response Format:
-        [
-            {
-                "id": 1,
-                "name": "South-South"
-            },
-            ...
-        ]
         """
         regions = Region.objects.all()
         serializer = RegionSerializer(regions, many=True)
@@ -100,17 +76,6 @@ class StoreByRegionView(APIView):
         
         Parameters:
         - region_id: ID of the selected region
-        
-        Response Format:
-        [
-            {
-                "id": 1,
-                "name": "Lagos Main",
-                "code": "LMN001",
-                "region": {"id": 1, "name": "South-South"}
-            },
-            ...
-        ]
         """
         # Only return active stores belonging to the specified region
         region = get_object_or_404(Region, id=region_id)
@@ -134,15 +99,6 @@ class AssignStoresToUserView(APIView):
         Parameters:
         - user_id: ID of the user being assigned stores
         - store_ids: List of store IDs to assign (in request body)
-        
-        Request Body Format:
-        {
-            "store_ids": [1, 2, 3]
-        }
-        
-        Responses:
-        - 200: Success with confirmation message
-        - 404: If user doesn't exist
         """
         store_ids = request.data.get('store_ids', [])
         
@@ -201,6 +157,30 @@ class StoreBudgetView(APIView):
         stores = Store.objects.all()
         serializer = StoreBudgetSerializer(stores, many=True)
         return CustomResponse(True, "Store Budgets Retrieved Successfully", 200, serializer.data)
+    
+    def post(self, request):
+        """Creates a new store"""
+        serializer = StoreBudgetSerializer(data=request.data)
+        if serializer.is_valid():
+            store = serializer.save()
+
+            # Track initial budget history
+            StoreBudgetHistory.objects.create(
+                store=store,
+                previous_budget=Decimal("0.00"),
+                new_budget=store.budget,
+                comment=request.data.get("comment", "Initial allocation"),
+                updated_by=request.user if request.user.is_authenticated else None
+            )
+
+            # Initialize balance if budget > 0
+            if store.balance == 0 and store.budget > 0:
+                store.balance = store.budget
+                store.save(update_fields=['balance'])
+
+            return CustomResponse(True, "Store added", data=serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
     def put(self, request, pk):
         store = get_object_or_404(Store, pk=pk)

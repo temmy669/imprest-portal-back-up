@@ -52,6 +52,11 @@ class StoreBudgetHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = StoreBudgetHistory
         fields = ['id', 'previous_budget', 'new_budget', 'comment', 'changed_at', 'updated_by']
+        
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        rep['changed_at'] = instance.changed_at.strftime('%d-%m-%Y')
+        return rep
 
     def get_updated_by(self, obj):
         return f"{obj.updated_by.first_name} {obj.updated_by.last_name}" if obj.updated_by else None
@@ -72,4 +77,6 @@ class StoreBudgetSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         rep = super().to_representation(instance)
         rep['region'] = instance.region.name
+        rep['updated_at'] = instance.updated_at.strftime('%d-%m-%Y')
+        rep['created_at'] = instance.created_at.strftime('%d-%m-%Y')
         return rep

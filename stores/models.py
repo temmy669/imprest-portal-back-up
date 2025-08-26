@@ -21,7 +21,6 @@ class Store(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)  # track when store created
     updated_at = models.DateTimeField(auto_now=True)      # track last modified
     is_active = models.BooleanField(default=True)
-
     restaurant_manager = models.ForeignKey(
         'users.User',
         on_delete=models.SET_NULL,
