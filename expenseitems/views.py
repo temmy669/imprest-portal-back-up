@@ -41,6 +41,12 @@ class ExpenseItemView(APIView):
             return CustomResponse(True, f"item updated successfully", 200, serializer.data)
 
         return CustomResponse(False, serializer.errors, 400)
+    
+    def delete(self, request, pk):
+        """Deletes an Expense Item"""
+        item = get_object_or_404(ExpenseItem, pk=pk)
+        item.delete()
+        return CustomResponse(True, "Item Deleted Successfully", 200)
 
         
         
