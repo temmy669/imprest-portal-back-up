@@ -49,7 +49,7 @@ class ReimbursementItem(models.Model):
     quantity = models.PositiveIntegerField(default=1)
     item_total = models.DecimalField(max_digits=12, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    # internal_control_status = models.CharField(max_length=20, choices=INTERNAL_CONTROL_STATUS_CHOICES, default="pending")
+    internal_control_status = models.CharField(max_length=20, choices=INTERNAL_CONTROL_STATUS_CHOICES, default="pending")
     receipt = models.FileField(upload_to='receipts/', null=True, blank=True)
     requires_receipt = models.BooleanField(default=False)
     # voucher_id = models.CharField(max_length=100, null=True, blank=True)
