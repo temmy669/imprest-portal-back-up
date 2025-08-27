@@ -381,7 +381,7 @@ class ApproveReimbursementItemView(APIView):
             item.save()
 
             #check if any item is declined
-            if any(i.status == 'declined' for i in items):
+            if any(i.status == 'declined' and i.status != 'pending' for i in items):
                 re.status = 'declined'
                 re.area_manager = request.user
                 re.area_manager_declined_at = timezone.now()
@@ -399,8 +399,10 @@ class ApproveReimbursementItemView(APIView):
             item.internal_control_status = 'approved'
             item.save()
             
-            if any(i.internal_control_status == 'declined' for i in items):
+            if any(i.internal_control_status == 'declined' and i.internal_control_status != 'pending' for i in items):
                 re.internal_control_status = "declined"
+                re.status = "pending"  # IC decline → send back as pending
+                item.status = 'pending'
                 re.internal_control = request.user
                 re.internal_control_declined_at = timezone.now()
             
@@ -426,7 +428,7 @@ class DeclineReimbursementView(APIView):
     
     def post(self, request, pk):
         re = get_object_or_404(Reimbursement, pk=pk)
-
+        items = re.items.all()
         self.check_object_permissions(request, re)
 
         comment_text = request.data.get('comment', '').strip()
@@ -434,11 +436,13 @@ class DeclineReimbursementView(APIView):
             return CustomResponse(False, 'Comment is required when declining', 400)
 
         if request.user.role.name == "Internal Control":
+            re.internal_control_status = "declined"
             # Send back to Area Manager as pending
             re.status = "pending"
-            re.internal_control_status = "declined"
+            items.update(status="pending") # Reset all items to pending
             re.internal_control = request.user
             re.internal_control_declined_at = timezone.now()
+            
             # Update all items status to declined
             re.items.update(internal_control_status="declined")
             
@@ -507,10 +511,10 @@ class DeclineReimbursementItemView(APIView):
             
             if any(i.internal_control_status == 'pending' for i in items):
                 # Some items still pending → request remains pending
-                re.status = "pending"
+                re.internal_control_status = "pending"
                 
             elif all(i.internal_control_status != 'pending' for i in items):
-                 # IC decline → send back as pending
+                # IC decline → send back as pending
                 re.status = "pending"
                 re.internal_control_status = "declined"
                 re.internal_control = request.user
