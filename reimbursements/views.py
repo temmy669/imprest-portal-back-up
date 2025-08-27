@@ -329,35 +329,31 @@ class ApproveReimbursementView(APIView):
     # Approve a reimbursement request and its items
     def post(self, request, pk):
         reimbursement = get_object_or_404(Reimbursement, pk=pk)
+        reimbursement_items = reimbursement.items.all()
+        name = ""
+        
         if request.user.role.name == "Area Manager":
             if reimbursement.status != 'pending':
                 return CustomResponse(False, "Reimbursement is not pending", 400)
-        
+            
+            reimbursement.status = 'approved'
+            reimbursement.area_manager = request.user
+            reimbursement.area_manager_approved_at = timezone.now()
+            name = "Area Manager"
+            
         elif request.user.role.name == "Internal Control":
             if reimbursement.internal_control_status != 'pending':
                 return CustomResponse(False, "Reimbursement is not pending", 400)
-
-        reimbursement.status = 'approved'
-        reimbursement_items = reimbursement.items.all()
-
-        # Approve all related items
-        reimbursement_items.update(status='approved')
-
-        if request.user.role.name == 'Area Manager':
-            reimbursement.area_manager = request.user
-            reimbursement.area_manager_approved_at = timezone.now()
-        elif request.user.role.name == 'Internal Control' and reimbursement.area_manager:
+            
             reimbursement.internal_control_status = "approved"
             reimbursement.internal_control = request.user
             reimbursement.internal_control_approved_at = timezone.now()
-        reimbursement.save()
-        
-        name = ""
-        if request.user.role.name == 'Area Manager':
-            name = "Area Manager"
-            
-        elif request.user.role.name == 'Internal Control':
             name = "Internal Control"
+        
+        reimbursement.save()
+       
+        # Approve all related items
+        reimbursement_items.update(status='approved')
         
         message = f"Reimbursement approved by {name} successfully"
 
@@ -372,46 +368,52 @@ class ApproveReimbursementItemView(APIView):
     def post(self, request, pk, item_id):
         re = get_object_or_404(Reimbursement, pk=pk)
         item = get_object_or_404(ReimbursementItem, pk=item_id, reimbursement=re)
-
+        items = re.items.all()
+        
         # Object-level permission check
         self.check_object_permissions(request, re)
-
-        if item.status == 'approved':
-            return CustomResponse(False, 'Item is already approved.', 400)
         
-        item.status = 'approved'
-        item.save()
+        if request.user.role.name == "Area Manager":
+            if item.status == 'approved':
+                return CustomResponse(False, 'Item is already approved.', 400)
+            
+            item.status = 'approved'
+            item.save()
 
-        items = re.items.all()
-
-
-        # Check if any item is declined
-        if any(i.status == 'declined' for i in items):
-            re.status = 'declined'
-            if request.user.role.name == "Area Manager":
+            #check if any item is declined
+            if any(i.status == 'declined' for i in items):
+                re.status = 'declined'
                 re.area_manager = request.user
                 re.area_manager_declined_at = timezone.now()
-            elif request.user.role.name == "Internal Control":
+            
+             # Check if all items are approved
+            elif all(i.status == 'approved' for i in items):
+                re.status = 'approved'
+                re.area_manager = request.user
+                re.area_manager_approved_at = timezone.now()
+        
+        elif request.user.role.name == "Internal Control":
+            if item.internal_control_status == 'approved':
+                return CustomResponse(False, 'Item is already approved.', 400)
+
+            item.internal_control_status = 'approved'
+            item.save()
+            
+            if any(i.internal_control_status == 'declined' for i in items):
                 re.internal_control_status = "declined"
                 re.internal_control = request.user
                 re.internal_control_declined_at = timezone.now()
-            re.save()
             
-         # Check if all items are approved
-        elif all(i.status == 'approved' for i in items):
-            re.status = 'approved'
-            if request.user.role.name == "Area Manager":
-                re.area_manager = request.user
-                re.area_manager_approved_at = timezone.now()
-            elif request.user.role.name == "Internal Control":
+            elif all(i.internal_control_status == 'approved' for i in items):
                 re.internal_control_status = "approved"
                 re.internal_control = request.user
                 re.internal_control_approved_at = timezone.now()
-            re.save()
+        re.save()
 
         return CustomResponse(True,
             {
-                'status': 'approved',
+                'status': re.status,
+                'internal_control_status': re.internal_control_status,
                 'item_id': item.id
             },
             200
@@ -437,15 +439,16 @@ class DeclineReimbursementView(APIView):
             re.internal_control_status = "declined"
             re.internal_control = request.user
             re.internal_control_declined_at = timezone.now()
+            # Update all items status to declined
+            re.items.update(internal_control_status="declined")
+            
         elif request.user.role.name == "Area Manager":
             # Final decline
             re.status = "declined"
             re.area_manager = request.user
             re.area_manager_declined_at = timezone.now()
-
-            # Update all items to declined (only final decline)
-        re.items.update(status="declined")
-
+            # Update all items status to declined
+            re.items.update(status="declined") 
         re.save()
 
         # Create decline comment
@@ -457,7 +460,7 @@ class DeclineReimbursementView(APIView):
 
         return CustomResponse(
             True,
-            {"status": re.status, "comment": comment_text},
+            {"status": re.status, "comment": comment_text, "internal_control_status": re.internal_control_status},
             200
         )
 
@@ -469,39 +472,49 @@ class DeclineReimbursementItemView(APIView):
     def post(self, request, pk, item_id):
         re = get_object_or_404(Reimbursement, pk=pk)
         item = get_object_or_404(ReimbursementItem, pk=item_id, reimbursement=re)
+        items = re.items.all()
 
         self.check_object_permissions(request, re)
 
         comment_text = request.data.get('comment', '').strip()
         if not comment_text:
             return CustomResponse(False, 'Comment is required when declining', 400)
-
-        if item.status == 'declined':
-            return CustomResponse(False, "Item is already declined", 400)
-
-        # Decline this item
-        item.status = 'declined'
-        item.save()
-
-        items = re.items.all()
-
-        if any(i.status == 'pending' for i in items):
+        
+        if request.user.role.name == "Area Manager":
+            if item.status == 'declined':
+                return CustomResponse(False, "Item is already declined", 400)
+            
+            # Decline this item
+            item.status = 'declined'
+            item.save()
+            
+            if any(i.status == 'pending' for i in items):
             # Some items still pending → request remains pending
-            re.status = "pending"
-        elif all(i.status != 'pending' for i in items):
-            # No more pending items
-            if request.user.role.name == "Internal Control":
-                # IC decline → send back as pending
                 re.status = "pending"
-                re.internal_control_status = "declined"
-                re.internal_control = request.user
-                re.internal_control_declined_at = timezone.now()
-            elif request.user.role.name == "Area Manager":
-                # Final decline
+            elif all(i.status != 'pending' for i in items):
+            # No more pending items
                 re.status = "declined"
                 re.area_manager = request.user
                 re.area_manager_declined_at = timezone.now()
-
+            
+        elif request.user.role.name == "Internal Control":
+            if item.internal_control_status == 'declined':
+                return CustomResponse(False, "Item is already declined", 400)
+            
+            # Decline this item
+            item.internal_control_status = "declined"
+            item.save()
+            
+            if any(i.internal_control_status == 'pending' for i in items):
+                # Some items still pending → request remains pending
+                re.status = "pending"
+                
+            elif all(i.internal_control_status != 'pending' for i in items):
+                 # IC decline → send back as pending
+                re.status = "pending"
+                re.internal_control_status = "declined"
+                re.internal_control = request.user
+                re.internal_control_declined_at = timezone.now()    
         re.save()
 
         # Save comment
@@ -515,6 +528,7 @@ class DeclineReimbursementItemView(APIView):
             True,
             {
                 "status": re.status,
+                "internal_control_status": re.internal_control_status,
                 "item_id": item.id,
                 "comment": comment_text
             },
