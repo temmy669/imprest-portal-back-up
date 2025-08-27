@@ -25,9 +25,9 @@ class ReimbursementItemSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'item_name', 'gl_code', 'transportation_from', 'transportation_to',
             'unit_price', 'quantity', 'item_total', 'purchase_request_ref',
-            'status', 'receipt', 'requires_receipt'
+            'status', 'internal_control_status', 'receipt', 'requires_receipt'
         ]
-        read_only_fields = ['item_total', 'requires_receipt', 'status']
+        read_only_fields = ['item_total', 'requires_receipt', 'status', 'internal_control_status']
     
       
    
