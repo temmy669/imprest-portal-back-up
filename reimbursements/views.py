@@ -348,6 +348,9 @@ class ApproveReimbursementView(APIView):
             reimbursement.internal_control_status = "approved"
             reimbursement.internal_control = request.user
             reimbursement.internal_control_approved_at = timezone.now()
+            
+             # Update all items status to declined
+            reimbursement.items.update(internal_control_status="approved")
             name = "Internal Control"
         
         reimbursement.save()
@@ -386,7 +389,7 @@ class ApproveReimbursementItemView(APIView):
                 re.area_manager = request.user
                 re.area_manager_declined_at = timezone.now()
             
-             # Check if all items are approved
+            # Check if all items are approved
             elif all(i.status == 'approved' for i in items):
                 re.status = 'approved'
                 re.area_manager = request.user
