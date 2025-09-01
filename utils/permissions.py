@@ -77,10 +77,11 @@ class BaseRolePermission(BasePermission):
                 'decline_reimbursement_request',
                 'view_reimbursement_request',
             ]:
-                return (
-                    getattr(user.role, 'name', '') == 'Area Manager' and
-                    obj.store in user.assigned_stores.all()
-                )
+                 role = getattr(user.role, 'name', '')
+            return (
+                (role == 'Area Manager' and obj.store in user.assigned_stores.all())
+                or role == 'Internal Control'
+            )
 
         return False
 
