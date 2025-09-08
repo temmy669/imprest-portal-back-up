@@ -178,16 +178,16 @@ DATABASES = {
 }
 
 
-if ENVIRONMENT == 'production':
-    DATABASES['default'] = {
-        'ENGINE': 'django.db.backends.mssql',
-        'NAME': config('DB_NAME', default='prod_database'),
-        'USER': config('DB_USER', default='prod_user'),
-        'PASSWORD': config('DB_PASSWORD', default='prod_password'),
-        'HOST': config('DB_HOST', default='prod_server'),
-        'PORT': config('DB_PORT', default='1433'),
-        'OPTIONS': {'driver': 'ODBC Driver 17 for SQL Server'},
-    }
+# if ENVIRONMENT == 'production':
+#     DATABASES['default'] = {
+#         'ENGINE': 'django.db.backends.mssql',
+#         'NAME': config('DB_NAME', default='prod_database'),
+#         'USER': config('DB_USER', default='prod_user'),
+#         'PASSWORD': config('DB_PASSWORD', default='prod_password'),
+#         'HOST': config('DB_HOST', default='prod_server'),
+#         'PORT': config('DB_PORT', default='1433'),
+#         'OPTIONS': {'driver': 'ODBC Driver 17 for SQL Server'},
+#     }
 
     
 # Password validation
