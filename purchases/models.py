@@ -61,3 +61,10 @@ class Comment(models.Model):
 
     class Meta:
         ordering = ['created_at']
+    
+class LimitConfig(models.Model):
+    limit = models.DecimalField(max_digits=10, decimal_places=2, default=5000)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    

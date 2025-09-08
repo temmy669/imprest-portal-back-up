@@ -4,7 +4,10 @@ from .models import (
     ReimbursementItem, 
     ReimbursementComment
 )
+from purchases.models import LimitConfig
 from decimal import Decimal
+
+purchase_limit = LimitConfig.objects.first()
 
 
 class ReimbursementCommentSerializer(serializers.ModelSerializer):
@@ -53,7 +56,7 @@ class ReimbursementItemSerializer(serializers.ModelSerializer):
         # ₦5,000 rule
         if unit_price is not None and quantity is not None:
             item_total = Decimal(unit_price) * quantity
-            if item_total >= 5000:
+            if item_total >= purchase_limit.limit:
                 attrs['requires_receipt'] = True
                 if not purchase_request_ref:
                     raise serializers.ValidationError(
@@ -90,7 +93,7 @@ class ReimbursementSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Reimbursement
-        fields = ['id', 'status', 'is_draft', 'items', 'comments', 'requester', 'internal_control_status']
+        fields = ['id', 'status', 'items', 'comments', 'requester', 'internal_control_status', 'store']
         read_only_fields = ['status', 'requester']
 
     def to_representation(self, instance):
@@ -119,28 +122,57 @@ class ReimbursementSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         items_data = validated_data.pop('items')
         comments_data = validated_data.pop('comments', [])
-        user = self.context['request'].user
-        validated_data['requester'] = user
-        validated_data['store'] = user.store
+        # user = self.context['request'].user
+        # validated_data['requester'] = user
+        
+
         validated_data['total_amount'] = sum(
-        Decimal(item['unit_price']) * item['quantity']
-        for item in items_data
-    )
+            Decimal(item['unit_price']) * item['quantity']
+            for item in items_data
+        )
 
         reimbursement = Reimbursement.objects.create(**validated_data)
 
+        # create items
         for item in items_data:
             item['item_total'] = Decimal(item['unit_price']) * item['quantity']
             ReimbursementItem.objects.create(reimbursement=reimbursement, **item)
 
-
+        # create comments
         for comment in comments_data:
             ReimbursementComment.objects.create(
                 reimbursement=reimbursement,
-                author=self.context['request'].user,
+                author=user,
                 **comment
             )
-    
+
+        # check missing receipts
+        missing_qs = reimbursement.items.filter(
+            requires_receipt=True
+        ).filter(receipt__isnull=True).union(
+            reimbursement.items.filter(requires_receipt=True, receipt="")
+        )
+
+        if missing_qs.exists():
+            raise serializers.ValidationError({
+                "detail": "Some items require receipt before submission.",
+                
+                "items_missing_receipts": [
+                    {
+                        "item_id": it.id,
+                        "item_name": it.item_name,
+                        "unit_price": str(it.unit_price),
+                        "quantity": it.quantity,
+                        "item_total": str(it.item_total),
+                    }
+                    for it in missing_qs
+                ]
+            })
+
+        # finalize
+        reimbursement.is_draft = False
+        reimbursement.status = "pending"
+        reimbursement.save(update_fields=["is_draft", "status"])
         return reimbursement
 
 

@@ -19,6 +19,9 @@ from django.db.models import Q
 from rest_framework.pagination import PageNumberPagination
 from collections import Counter
 from datetime import datetime
+from django.http import HttpResponse
+import openpyxl
+from openpyxl.utils import get_column_letter
 
 class ReimbursementRequestView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
@@ -120,19 +123,21 @@ class ReimbursementRequestView(APIView):
         )
 
     def post(self, request):
+        # Step 1: Create reimbursement (draft by default)
         serializer = ReimbursementSerializer(data=request.data, context={'request': request})
-        if serializer.is_valid():
-            reimbursement = serializer.save(requester=request.user)
-            
-            # Check if any item requires receipt
-            items_requiring_receipt = [item.item_name for item in reimbursement.items.all() if item.requires_receipt]
-            message = "Reimbursement Request Created Successfully"
-            if items_requiring_receipt:
-                message += f". Please upload receipts for the following items: {', '.join(items_requiring_receipt)}."
+        if not serializer.is_valid():
+            return CustomResponse(False, "Invalid data", 400, serializer.errors)
 
-            return CustomResponse(True, message, 201, ReimbursementSerializer(reimbursement).data)
+        reimbursement = serializer.save(requester=request.user)
+
+        return CustomResponse(
+            True,
+            "Reimbursement submitted for approval",
+            201,
+            ReimbursementSerializer(reimbursement).data
+        )
         
-        return CustomResponse(False, serializer.errors, 400)
+        
 
     def put(self, request, pk):
         reimbursement = get_object_or_404(Reimbursement, pk=pk)
@@ -294,6 +299,7 @@ class SubmitReimbursementView(APIView):
         ).filter(receipt__isnull=True).union(
             reimbursement.items.filter(requires_receipt=True, receipt="")
         )
+        
 
         if missing_qs.exists():
             missing = [
@@ -353,7 +359,8 @@ class ApproveReimbursementView(APIView):
             reimbursement.items.update(internal_control_status="approved")
             name = "Internal Control"
         
-        reimbursement.save()
+        reimbursement.updated_by = request.user
+        reimbursement.save(user=request.user)
        
         # Approve all related items
         reimbursement_items.update(status='approved')
@@ -413,7 +420,7 @@ class ApproveReimbursementItemView(APIView):
                 re.internal_control_status = "approved"
                 re.internal_control = request.user
                 re.internal_control_approved_at = timezone.now()
-        re.save()
+        re.save(user=request.user)
 
         return CustomResponse(True,
             {
@@ -456,7 +463,7 @@ class DeclineReimbursementView(APIView):
             re.area_manager_declined_at = timezone.now()
             # Update all items status to declined
             re.items.update(status="declined") 
-        re.save()
+        re.save(user=request.user)
 
         # Create decline comment
         ReimbursementComment.objects.create(
@@ -522,7 +529,7 @@ class DeclineReimbursementItemView(APIView):
                 re.internal_control_status = "declined"
                 re.internal_control = request.user
                 re.internal_control_declined_at = timezone.now()    
-        re.save()
+        re.save(user=request.user)
 
         # Save comment
         ReimbursementComment.objects.create(
@@ -541,4 +548,97 @@ class DeclineReimbursementItemView(APIView):
             },
             200
         )
+        
+class ExportReimbursement(APIView):
+    authentication_classes = [JWTAuthenticationFromCookie]
+    permission_classes = [IsAuthenticated, ViewReimbursementRequest]
+
+    def get(self, request):
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        status = request.query_params.get('status')
+        
+        user = request.user
+        reimbursement = Reimbursement.objects.all()
+
+        if not start_date or not end_date or not status:
+            return CustomResponse(False, "start_date, end_date and status are required", 400)
+
+        try:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d')
+            end_date = datetime.strptime(end_date, '%Y-%m-%d')
+        except ValueError:
+            return CustomResponse(False, "Invalid date format. Use YYYY-MM-DD", 400)
+
+        if start_date > end_date:
+            return CustomResponse(False, "start_date cannot be after end_date", 400)
+
+        
+        # Filter queryset based on role
+        if user.role.name == 'Area Manager':
+            queryset = Reimbursement.objects.filter(
+                store__in=user.assigned_stores.all(),
+                created_at__date__gte=start_date.date(),
+                created_at__date__lte=end_date.date(),
+                status__iexact=status
+            )
+        elif user.role.name == 'Internal Control':
+            queryset = Reimbursement.objects.filter(
+                created_at__date__gte=start_date.date(),
+                created_at__date__lte=end_date.date(),
+                internal_control_status__iexact=status
+            )
+        else:
+            queryset = Reimbursement.objects.filter(
+                created_at__date__gte=start_date.date(),
+                created_at__date__lte=end_date.date(),
+                status__iexact=status
+            )
+
+        # Create workbook
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+
+        # Keep title <= 31 chars
+        sheet.title = f"PRs {start_date:%d-%m} to {end_date:%d-%m}"
+
+        # Define headers
+        headers = ["Request ID", "Requester", "Store", "Total Amount", "Status", "Date Created"]
+        sheet.append(headers)
+
+               # Add rows
+        for rr in queryset:
+            if user.role.name == 'Internal Control':
+                status_display = rr.internal_control_status.capitalize()
+            else:
+                status_display = rr.status.capitalize()
+            row = [
+                f"RR-{rr.id:04d}",
+                f"{rr.requester.first_name} {rr.requester.last_name}",
+                rr.store.name if rr.store else "",
+                f"₦{rr.total_amount:,.2f}",
+                status_display,
+                rr.created_at.strftime('%Y-%m-%d'),
+            ]
+            sheet.append(row)
+
+        # Adjust column widths
+        for col in sheet.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                if cell.value:
+                    max_length = max(max_length, len(str(cell.value)))
+            sheet.column_dimensions[column].width = max_length + 2
+
+        # Prepare response
+        file_name = f"reimbursement_requests_{start_date.date()}_{end_date.date()}.xlsx"
+        response = HttpResponse(
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{file_name}"'
+
+        workbook.save(response)  # Write workbook to response
+        return response
+
         

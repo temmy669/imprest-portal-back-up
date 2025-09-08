@@ -24,6 +24,7 @@ class Reimbursement(models.Model):
     is_draft = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='updated_reimbursements')
 
     # Approvals
     area_manager = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='area_manager_reimbursements')
@@ -33,11 +34,17 @@ class Reimbursement(models.Model):
     internal_control_approved_at = models.DateTimeField(null=True, blank=True)
     internal_control_declined_at = models.DateTimeField(null=True, blank=True)
     internal_control_status = models.CharField(max_length=20, choices=INTERNAL_CONTROL_STATUS_CHOICES, default="pending")
-
-    
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reimbursement_updates')
     # link to PRs (for items >= 5000)
     purchase_requests = models.ManyToManyField(PurchaseRequest, blank=True, related_name='reimbursements')
 
+    def save(self, *args, user=None, **kwargs):
+        if user:
+            self.updated_by = user
+            if not self.pk:  # new object being created
+                self.requester = user
+        super().save(*args, **kwargs)
+    
 class ReimbursementItem(models.Model):
     reimbursement = models.ForeignKey(Reimbursement, on_delete=models.CASCADE, related_name='items')
     purchase_request_ref = models.CharField(max_length=100, blank=True, null=True, unique=True)
