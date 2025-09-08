@@ -270,63 +270,8 @@ class UploadReceiptView(APIView):
             True,
             "Receipt uploaded successfully",
             200,
-            {
-                "item_id": item.id,
-                "reimbursement_id": item.reimbursement.id,
-                "requires_receipt": item.requires_receipt,
-                "receipt_url": request.build_absolute_uri(item.receipt.url),
-            }
         )
         
-class SubmitReimbursementView(APIView):
-    """
-    Finalize a reimbursement (move from draft to pending).
-    POST /reimbursements/<int:pk>/submit/
-    """
-    authentication_classes = [JWTAuthenticationFromCookie]
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, pk):
-        reimbursement = get_object_or_404(
-            Reimbursement,
-            pk=pk,
-            requester=request.user
-        )
-
-        # Find items missing required receipts
-        missing_qs = reimbursement.items.filter(
-            requires_receipt=True
-        ).filter(receipt__isnull=True).union(
-            reimbursement.items.filter(requires_receipt=True, receipt="")
-        )
-        
-
-        if missing_qs.exists():
-            missing = [
-                {
-                    "item_id": it.id,
-                    "item_name": it.item_name,
-                    "unit_price": str(it.unit_price),
-                    "quantity": it.quantity,
-                    "item_total": str(it.item_total),
-                }
-                for it in missing_qs
-            ]
-            return CustomResponse(
-                False,
-                "One or more items require a receipt before submission.",
-                400,
-                {"items_missing_receipts": missing}
-            )
-
-        # All good: finalize
-        reimbursement.is_draft = False
-        reimbursement.status = "pending"  # or your specific pending status
-        reimbursement.save(update_fields=["is_draft", "status"])
-
-        data = ReimbursementSerializer(reimbursement).data
-        return CustomResponse(True, "Reimbursement submitted for approval", 200, data)
-    
     
 class ApproveReimbursementView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
