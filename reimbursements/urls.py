@@ -2,7 +2,6 @@ from django.urls import path
 from .views import (
     ReimbursementRequestView,
     UploadReceiptView,
-    SubmitReimbursementView,
     ApproveReimbursementView,
     ApproveReimbursementItemView,
     DeclineReimbursementView,
