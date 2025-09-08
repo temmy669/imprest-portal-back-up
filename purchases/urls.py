@@ -8,6 +8,8 @@ from .views import (
     SearchPurchaseRequestView,
     DateRangeFilterView,
     ListApprovedPurchaseRequestView,
+    UpdatePurchaseRequestLimit,
+    ExportPurchaseRequest
 )
 
 urlpatterns = [
@@ -59,5 +61,13 @@ urlpatterns = [
     path('approved-purchase-requests/',
         ListApprovedPurchaseRequestView.as_view(),
         name='list-approved-purchase-requests'  
-    )
+    ),
+    
+    path('limit-config/',
+         UpdatePurchaseRequestLimit.as_view(), 
+         name='update-purchase-request-limit'),
+    
+    path('export-purchase-requests/', 
+         ExportPurchaseRequest.as_view(), 
+         name='export-purchase-requests'),
 ]

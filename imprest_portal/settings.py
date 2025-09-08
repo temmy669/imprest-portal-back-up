@@ -77,7 +77,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'reimbursements.middleware.current_user_middleware.CurrentUserMiddleware',
 ]
 
 ROOT_URLCONF = 'imprest_portal.urls'

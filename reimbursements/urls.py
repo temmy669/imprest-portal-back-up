@@ -8,7 +8,8 @@ from .views import (
     DeclineReimbursementView,
     DeclineReimbursementItemView,
     InternalControlReimbursementView,
-)
+    ExportReimbursement,
+)   
 from django.conf import settings
 from django.conf.urls.static import static
 
@@ -19,9 +20,6 @@ urlpatterns = [
     path('internal-control-re/', InternalControlReimbursementView.as_view(), name='internal-control-re'),
     path('reimbursements/<int:pk>/', ReimbursementRequestView.as_view(), name='reimbursement-update'),
     
-    # Submit a reimbursement (requires reimbursement pk)
-    path('reimbursements/<int:pk>/submit/', SubmitReimbursementView.as_view(), name='submit-reimbursement'),
-
     # Upload receipt for a specific reimbursement item
     path('reimbursement-items/<int:item_id>/receipt/', UploadReceiptView.as_view(), name='upload-receipt'),
     
@@ -36,6 +34,9 @@ urlpatterns = [
 
     # Decline individual reimbursement item
     path('reimbursements/<int:pk>/items/<int:item_id>/decline/', DeclineReimbursementItemView.as_view(), name='decline-reimbursement-item'),
+    
+    # export reimbursements
+    path('reimbursements/export/', ExportReimbursement.as_view(), name='export-reimbursements'),
 ]
 
 if settings.DEBUG:

@@ -13,6 +13,9 @@ from datetime import datetime
 from django.db.models import Count
 from rest_framework.pagination import PageNumberPagination
 from collections import Counter
+import openpyxl
+from openpyxl.utils import get_column_letter
+from django.http import HttpResponse
 
 class PurchaseRequestView(APIView):
     """
@@ -100,6 +103,23 @@ class PurchaseRequestView(APIView):
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(True, serializer.data, 200)
+        return CustomResponse(False, serializer.errors, 400)
+
+class UpdatePurchaseRequestLimit(APIView):
+    """Updates the minimum limit for items in a purchase request"""
+    authentication_classes = [JWTAuthenticationFromCookie]
+    permission_classes = [IsAuthenticated, ManageUsers]
+    
+    def put(self, request):
+        serializer = LimitConfigSerializer(data=request.data)
+        if serializer.is_valid():
+            limit_value = serializer.validated_data.get('limit')
+            if limit_value is None:
+                return CustomResponse(False, "'limit' field is required.", 400)
+            config, created = LimitConfig.objects.get_or_create(id=1)
+            config.limit = limit_value
+            config.save()
+            return CustomResponse(True, "Limit updated successfully", 200, {'limit': config.limit})
         return CustomResponse(False, serializer.errors, 400)
     
 
@@ -407,3 +427,73 @@ class DateRangeFilterView(APIView):
         }
 
         return CustomResponse(True, "Filtered purchase requests retrieved", 200, response_data)
+
+class ExportPurchaseRequest(APIView):
+    authentication_classes = [JWTAuthenticationFromCookie]
+    permission_classes = [IsAuthenticated, ViewPurchaseRequest]
+
+    def get(self, request):
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        status = request.query_params.get('status')
+
+        if not start_date or not end_date or not status:
+            return CustomResponse(False, "start_date, end_date and status are required", 400)
+
+        try:
+            start_date = datetime.strptime(start_date, '%Y-%m-%d')
+            end_date = datetime.strptime(end_date, '%Y-%m-%d')
+        except ValueError:
+            return CustomResponse(False, "Invalid date format. Use YYYY-MM-DD", 400)
+
+        if start_date > end_date:
+            return CustomResponse(False, "start_date cannot be after end_date", 400)
+
+        # Filter queryset
+        queryset = PurchaseRequest.objects.filter(
+            created_at__date__gte=start_date.date(),
+            created_at__date__lte=end_date.date(),
+            status__iexact=status
+        )
+
+        # Create workbook
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+
+        # Keep title <= 31 chars
+        sheet.title = f"PRs {start_date:%d-%m} to {end_date:%d-%m}"
+
+        # Define headers
+        headers = ["Request ID", "Requester", "Store", "Total Amount", "Status", "Date Created"]
+        sheet.append(headers)
+
+        # Add rows
+        for pr in queryset:
+            row = [
+                f"PR-{pr.id:04d}",
+                f"{pr.requester.first_name} {pr.requester.last_name}",
+                pr.store.name if pr.store else "",
+                f"₦{pr.total_amount:,.2f}",
+                pr.status.capitalize(),
+                pr.created_at.strftime('%Y-%m-%d'),
+            ]
+            sheet.append(row)
+
+        # Adjust column widths
+        for col in sheet.columns:
+            max_length = 0
+            column = col[0].column_letter
+            for cell in col:
+                if cell.value:
+                    max_length = max(max_length, len(str(cell.value)))
+            sheet.column_dimensions[column].width = max_length + 2
+
+        # Prepare response
+        file_name = f"purchase_requests_{start_date.date()}_{end_date.date()}.xlsx"
+        response = HttpResponse(
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{file_name}"'
+
+        workbook.save(response)  # Write workbook to response
+        return response

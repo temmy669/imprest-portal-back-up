@@ -1,7 +1,11 @@
 from rest_framework.permissions import BasePermission
-from purchases.models import PurchaseRequest
+from purchases.models import PurchaseRequest, LimitConfig
 from reimbursements.models import Reimbursement
 from helpers.exceptions import CustomValidationException
+
+purchase_limit = LimitConfig.objects.first()
+
+
 class BaseRolePermission(BasePermission):
     """
     Base permission class that all other permissions will inherit from
@@ -29,7 +33,7 @@ class BaseRolePermission(BasePermission):
                 return False
 
             if amount >= self.amount_threshold:
-                return user.role.permissions.filter(codename='approve_over_5000').exists()
+                return user.role.permissions.filter(codename='approve_over_limit').exists()
             return True
 
         # Codename-based check
@@ -109,8 +113,8 @@ class DeclinePurchaseRequest(BaseRolePermission):
 class ManageUsers(BaseRolePermission):
     codename = 'manage_users'
 
-class ApproveOver5000(BaseRolePermission):
-    amount_threshold = 5000
+class ApproveOverlimit(BaseRolePermission):
+    amount_threshold = purchase_limit.limit
 
 class ViewAnalytics(BaseRolePermission):
     codename = 'view_analytics'

@@ -28,7 +28,7 @@ def send_approval_notification(purchase_request):
     }
 
     # Render HTML and plain text versions
-    html_message = render_to_string('approval.html', context)
+    html_message = render_to_string('pr_approval.html', context)
     plain_message = strip_tags(html_message)
     print(html_message)
     
@@ -67,7 +67,7 @@ def send_rejection_notification(purchase_request):
     }
 
 
-    html_message = render_to_string('rejection.html', context)
+    html_message = render_to_string('pr_rejection.html', context)
     plain_message = strip_tags(html_message)
     
     send_mail(
@@ -96,7 +96,7 @@ def send_creation_notification(purchase_request):
         'company_name': settings.COMPANY_NAME
     }
 
-    html_message = render_to_string('creation.html', context)
+    html_message = render_to_string('pr_creation.html', context)
     plain_message = strip_tags(html_message)
     
     send_mail(
@@ -129,7 +129,7 @@ def send_reimbursement_creation_notification(reimbursement):
         'company_name': settings.COMPANY_NAME
     }
 
-    html_message = render_to_string('creation.html', context)
+    html_message = render_to_string('rr_creation.html', context)
     plain_message = strip_tags(html_message)
     
     send_mail(
@@ -142,75 +142,134 @@ def send_reimbursement_creation_notification(reimbursement):
         html_message=html_message
     )
     
-def send_reimbursement_approval_notification(reimbursement):
+def send_reimbursement_approval_notification(reimbursement, user):
     """
     Sends approval notification to requester with complete request details
     """
     
     requester = User.objects.get(id=reimbursement.requester_id)
+    area_manager = reimbursement.store.area_manager
+    
+    requester = User.objects.get(id=reimbursement.requester_id)
+    
+    if user.role.name == "Area Mnanager":
+        name = requester.get_full_name()
+        approved_by = reimbursement.area_manager.get_full_name() if reimbursement.area_manager else "N/A"
+        approval_date = reimbursement.area_manager_approved_at
+        status = reimbursement.get_status_display()
+        request_date = reimbursement.created_at.strftime("%b %d, %Y %I:%M %p"),
+        
+    elif user.role.name == "Internal Control":
+        name = area_manager.get_full_name()
+        approved_by = reimbursement.internal_control.get_full_name() if reimbursement.internal_control else "N/A"
+        approval_date = reimbursement.internal_control_approved_at
+        status = reimbursement.get_internal_control_status_display()
+        request_date = reimbursement.area_manager_approval_date.strftime("%b %d, %Y %I:%M %p") if reimbursement.area_manager_approval_date else "N/A",
     
     # Build context for email template
     context = {
         'request_id': f"RR-{reimbursement.id:04d}",
-        'requester_name': requester.get_full_name(),
+        'name': name,
         'store_name': reimbursement.store.name,
         'store_code': reimbursement.store.code,
         'approvedby_name': reimbursement.area_manager.get_full_name(),
+        'internal_control_approvedby_name': reimbursement.internal_control.get_full_name() if reimbursement.internal_control else "N/A",
         'total_amount': f"₦{reimbursement.total_amount:,.2f}",
         'items': reimbursement.items.all(),
-        'approval_date': reimbursement.area_manager_approved_at.strftime("%b %d, %Y %I:%M %p"),
+        'area_manager_approval_date': reimbursement.area_manager_approved_at.strftime("%b %d, %Y %I:%M %p"),
+        'internal_control_approval_date': reimbursement.internal_control_approved_at.strftime("%b %d, %Y %I:%M %p") if reimbursement.internal_control_approved_at else "N/A",
+        'internal_control_status': reimbursement.get_internal_control_status_display(),
         'status': reimbursement.get_status_display(),
         'request_date': reimbursement.created_at.strftime("%b %d, %Y %I:%M %p"),
         'company_name': settings.COMPANY_NAME
     }
+    
+    
+    # Dynamic allocation of receipient and appropriate html template.
+    if user.role.name == "Area Manager":
+        receipient = requester.email
+        html_template = 'am_reimbursement_approval.html'
+        
+    elif user.role.name == "Internal Control":
+        receipient = area_manager.email
+        html_template = 'ic_reimbursement_approval.html'
+    
 
     # Render HTML and plain text versions
-    html_message = render_to_string('approval.html', context)
+    html_message = render_to_string(html_template, context)
     plain_message = strip_tags(html_message)
     print(html_message)
+    
+    
     
     # Send email
     send_mail(
         subject=f"Reimbursement Request Approved - {context['request_id']}",
         message=plain_message,
         from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[requester.email],
+        recipient_list=[receipient],
         html_message=html_message,
         fail_silently=False
     )
     
-def send_reimbursement_rejection_notification(reimbursement):
+def send_reimbursement_rejection_notification(reimbursement, user):
     """
     Sends rejection notification with reason
     """
-    requester = User.objects.get(id=reimbursement.requester_id)
+    
+    area_manager = reimbursement.store.area_manager # Get the area manager of the store that made the request
     
     items = reimbursement.items.all()
-    comments =  reimbursement.comments.filter(author=reimbursement.internal_control).order_by('-created_at').first()
+    requester = User.objects.get(id=reimbursement.requester_id)
+    
+    if user.role.name == "Area Mnanager":
+        name = requester.get_full_name()
+        rejector = reimbursement.area_manager.get_full_name() if reimbursement.area_manager else "N/A"
+        comments =  reimbursement.comments.filter(author=reimbursement.area_manager).order_by('-created_at').first()
+        rejection_date = reimbursement.area_manager_declined_at
+        status = reimbursement.get_status_display()
+        request_date = reimbursement.created_at.strftime("%b %d, %Y %I:%M %p"),
+        
+    elif user.role.name == "Internal Control":
+        name = area_manager.get_full_name()
+        rejector = reimbursement.internal_control.get_full_name() if reimbursement.internal_control else "N/A"
+        comments =  reimbursement.comments.filter(author=reimbursement.internal_control).order_by('-created_at').first()
+        rejection_date = reimbursement.internal_control_declined_at
+        status = reimbursement.get_internal_control_status_display()
+        request_date = reimbursement.area_manager_approval_date.strftime("%b %d, %Y %I:%M %p") if reimbursement.area_manager_approval_date else "N/A",
     
     context = {
         'request_id': f"RR-{reimbursement.id:04d}",
-        'requester_name': requester.get_full_name(),
-        'rejector_name': reimbursement.internal_control.get_full_name() if reimbursement.internal_control else "N/A",
+        'name':name,
+        'rejector_name': rejector,
         'rejection_reason': comments.text if comments else "No reason provided.",
         'items': items, 
-        'rejection_date': reimbursement.internal_control_declined_at.strftime("%b %d, %Y %I:%M %p") if reimbursement.internal_control_declined_at else "N/A",
+        'rejection_date': rejection_date,
         'company_name': settings.COMPANY_NAME,
         'store_name': reimbursement.store.name,
         'total_amount': f"₦{reimbursement.total_amount:,.2f}",
-        'request_date': reimbursement.created_at.strftime("%b %d, %Y %I:%M %p"),
-        'status': reimbursement.get_status_display()
+        'request_date': request_date,
+        'status': status
     }
+    
+     # Dynamic allocation of receipient and appropriate html template.
+    if user.role.name == "Area Manager":
+        receipient = requester.email
+        html_template = 'reimbursement_rejection.html'
+        
+    elif user.role.name == "Internal Control":
+        receipient = area_manager.email
+        html_template = 'reimbursement_rejection.html'
 
 
-    html_message = render_to_string('rejection.html', context)
+    html_message = render_to_string(html_template, context)
     plain_message = strip_tags(html_message)
     
     send_mail(
         subject=f"Reimbursement Request Declined - {context['request_id']}",
         message=plain_message,
         from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[requester.email],
+        recipient_list=[receipient],
         html_message=html_message
     )
     
