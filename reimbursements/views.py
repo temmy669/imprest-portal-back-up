@@ -46,6 +46,7 @@ class ReimbursementRequestView(APIView):
             queryset = queryset.filter(status='approved')
         elif user.role.name == 'Treasurer':
             queryset = queryset.filter(internal_control_status='approved')
+            
 
         
          # Filters from query params
@@ -113,7 +114,12 @@ class ReimbursementRequestView(APIView):
         paginated_queryset = paginator.paginate_queryset(queryset, request)
 
         # Calculate status counts for just this page
-        status_list = [obj.status for obj in (paginated_queryset or [])]
+        if user.role.name == 'Treasurer':
+            status_list = [obj.disbursement_status for obj in (paginated_queryset or [])]
+        
+        else:
+            status_list = [obj.status for obj in (paginated_queryset or [])]
+        
         status_count_dict = dict(Counter(status_list))
         
         serializer = ReimbursementSerializer(paginated_queryset, many=True)
