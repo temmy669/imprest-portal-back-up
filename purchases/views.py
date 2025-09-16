@@ -16,6 +16,8 @@ from collections import Counter
 import openpyxl
 from openpyxl.utils import get_column_letter
 from django.http import HttpResponse
+from collections import Counter
+from datetime import datetime
 
 class PurchaseRequestView(APIView):
     """
@@ -94,7 +96,7 @@ class PurchaseRequestView(APIView):
     
     def put(self, request, pk):
         """
-        Update an existing purchase request
+        Updates an existing purchase request
         """
         pr = get_object_or_404(PurchaseRequest, pk=pk)
 
@@ -106,7 +108,9 @@ class PurchaseRequestView(APIView):
         return CustomResponse(False, serializer.errors, 400)
 
 class UpdatePurchaseRequestLimit(APIView):
+    
     """Updates the minimum limit for items in a purchase request"""
+    
     authentication_classes = [JWTAuthenticationFromCookie]
     permission_classes = [IsAuthenticated, ManageUsers]
     
@@ -325,8 +329,7 @@ class DeclinePurchaseRequestItemView(APIView):
             200
         )
         
-from collections import Counter
-
+        
 class SearchPurchaseRequestView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
     permission_classes = [IsAuthenticated, ViewPurchaseRequest]
@@ -436,6 +439,7 @@ class ExportPurchaseRequest(APIView):
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
         status = request.query_params.get('status')
+        user = request.user
 
         if not start_date or not end_date or not status:
             return CustomResponse(False, "start_date, end_date and status are required", 400)
@@ -454,7 +458,16 @@ class ExportPurchaseRequest(APIView):
             created_at__date__gte=start_date.date(),
             created_at__date__lte=end_date.date(),
             status__iexact=status
+            
         )
+        
+        
+        # Restaurant Managers only see their own requests
+        if user.role.name == 'Restaurant Manager':
+            queryset = queryset.filter(requester=user)
+        # Area Managers see requests from their stores
+        elif user.role.name == 'Area Manager':
+            queryset = queryset.filter(store__region=user.region)
 
         # Create workbook
         workbook = openpyxl.Workbook()

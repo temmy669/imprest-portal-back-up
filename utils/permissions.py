@@ -134,3 +134,7 @@ class ApproveReimbursementRequest(BaseRolePermission):
 class DeclineReimbursementRequest(BaseRolePermission):
     codename = 'decline_reimbursement_request'   # distinct from purchase
     object_permission = True
+
+class DisbureseReimbursementRequest(BaseRolePermission):
+    codename = 'disburse_reimbursement'   # distinct from purchase
+    object_permission = True

@@ -27,12 +27,12 @@ def handle_reimbursement_request_status_change(sender, instance, **kwargs):
         if instance.status == "approved":
             send_reimbursement_approval_notification(instance, user)
         elif instance.status == "declined":
-            send_reimbursement_rejection_notification(instance)
+            send_reimbursement_rejection_notification(instance, user)
 
     # --- Internal Control updates internal_control_status ---
     elif role == "Internal control person" and old_instance.internal_control_status != instance.internal_control_status:
         if instance.internal_control_status == "approved":
             send_reimbursement_approval_notification(instance, user)
         elif instance.internal_control_status == "declined":
-            send_reimbursement_rejection_notification(instance)
+            send_reimbursement_rejection_notification(instance ,user)
 

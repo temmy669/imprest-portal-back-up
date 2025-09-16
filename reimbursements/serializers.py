@@ -93,8 +93,8 @@ class ReimbursementSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Reimbursement
-        fields = ['id', 'status', 'items', 'comments', 'requester', 'internal_control_status', 'store']
-        read_only_fields = ['status', 'requester']
+        fields = ['id', 'status', 'items', 'comments', 'requester', 'internal_control_status', 'store', 'disbursement_status']
+        read_only_fields = ['status', 'requester', 'disbursement_status', 'internal_control_status']
 
     def to_representation(self, instance):
         rep = super().to_representation(instance)
