@@ -559,13 +559,13 @@ class DisbursemntView(APIView):
     def post(self, request, pk):
         reimbursement = get_object_or_404(Reimbursement, pk=pk)
         
-        if request.user.role.name == "Treasurer":
-            if reimbursement.status != 'approved' or reimbursement.internal_control_status != 'approved':
-                return CustomResponse(False, "Reimbursement is not approved by both Area Manager and Internal Control", 400)
+       
             
-            reimbursement.disbursement_status = 'disbursed'
-            reimbursement.treasurer = request.user
-            reimbursement.disbursed_at = timezone.now()
+        reimbursement.disbursement_status = 'disbursed'
+        reimbursement.treasurer = request.user
+        reimbursement.bank = request.data.get('bank')
+        reimbursement.account = request.data.get('account')
+        reimbursement.disbursed_at = timezone.now()
            
             
         reimbursement.updated_by = request.user
@@ -575,5 +575,30 @@ class DisbursemntView(APIView):
         message = f"Reimbursement disbursed by Treasurer successfully"
 
         return CustomResponse(True, message, 200)
+    
+class BulkDisbursemntView(APIView):
+    authentication_classes = [JWTAuthenticationFromCookie]
+    permission_classes = [IsAuthenticated, ApproveReimbursementRequest]
+    
+    # Bulk Disburse reimbursement requests and their items
+    def post(self, request):
+        ids = request.data.get('ids', [])
+        if not isinstance(ids, list) or not all(isinstance(i, int) for i in ids):
+            return CustomResponse(False, "Invalid 'ids' format. Must be a list of integers.", 400)
+        
+        reimbursements = Reimbursement.objects.filter(id__in=ids, internal_control_status='approved', disbursement_status='pending')
+        updated_count = 0
+        
+        for reimbursement in reimbursements:
+            reimbursement.disbursement_status = 'disbursed'
+            reimbursement.treasurer = request.user
+            reimbursement.bank = request.data.get('bank')
+            reimbursement.account = request.data.get('account')
+            reimbursement.disbursed_at = timezone.now()
+            reimbursement.updated_by = request.user
+            reimbursement.save(user=request.user)
+            updated_count += 1
+        
+        return CustomResponse(True, f"{updated_count} reimbursements disbursed successfully", 200)
     
         
