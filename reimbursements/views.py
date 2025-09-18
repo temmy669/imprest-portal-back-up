@@ -477,7 +477,7 @@ class ExportReimbursement(APIView):
         headers = []
         
         if user.role.name == 'Treasurer':
-            headers = ["Request ID", "Requester", "Region", "Store", "Area Manager", "Total Amount", "Status", "Date Created"]
+            headers = ["Request ID", "Requester", "Region", "Store", "Area Manager", "Total Amount", "Status", "Date Created", "Bank Name", "Account Name"]
             sheet.title = f"TRRs {start_date:%d-%m} to {end_date:%d-%m}"
             
         else:
@@ -513,6 +513,8 @@ class ExportReimbursement(APIView):
                 f"₦{rr.total_amount:,.2f}",
                 status_display,
                 rr.created_at.strftime('%Y-%m-%d')
+                rr.bank,
+                rr.account
             ]
                 file_name = f"Treasury_reimbursement_requests_{start_date.date()}_{end_date.date()}.xlsx"
                 
