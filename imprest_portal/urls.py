@@ -33,4 +33,5 @@ urlpatterns = [
     path('api/docs/swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/docs/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
     path('dashboard/', DashboardView.as_view(), name='dashboard-view'),
+    path('banks/', include('banks.urls')),
 ]

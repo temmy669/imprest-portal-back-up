@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     'helpers.apps.HelpersConfig',
     'reimbursements.apps.ReimbursementsConfig',
     'expenseitems.apps.ExpenseitemsConfig',
+    'banks.apps.BanksConfig',
 ]
 
 AUTH_USER_MODEL = 'users.User'

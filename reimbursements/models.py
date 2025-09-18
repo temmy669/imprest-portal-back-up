@@ -34,9 +34,10 @@ class Reimbursement(models.Model):
     disbursement_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     treasurer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='treasurer_reimbursements')
     disbursed_at = models.DateTimeField(null=True, blank=True)
+    bank = models.CharField(max_length=100, null=True, blank=True)
+    account = models.CharField(max_length=100, null=True, blank=True)
     # link to PRs (for items >= 5000)
     purchase_requests = models.ManyToManyField(PurchaseRequest, blank=True, related_name='reimbursements')
-
     def save(self, *args, user=None, **kwargs):
         if user:
             self.updated_by = user
@@ -58,7 +59,7 @@ class ReimbursementItem(models.Model):
     internal_control_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     receipt = models.FileField(upload_to='receipts/', null=True, blank=True)
     requires_receipt = models.BooleanField(default=False)
-    # voucher_id = models.CharField(max_length=100, null=True, blank=True)
+   
     
 
 class ReimbursementComment(models.Model):

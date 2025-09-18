@@ -1,4 +1,4 @@
-from rest_framework.permissions import BasePermission
+from rest_framework.permissions import BasePermission, SAFE_METHODS
 from purchases.models import PurchaseRequest, LimitConfig
 from reimbursements.models import Reimbursement
 from helpers.exceptions import CustomValidationException
@@ -13,6 +13,7 @@ class BaseRolePermission(BasePermission):
     codename = None
     amount_threshold = None
     object_permission = False
+    
 
     def has_permission(self, request, view):
         user = request.user
@@ -74,21 +75,30 @@ class BaseRolePermission(BasePermission):
 
         # --- Reimbursement logic ---
         if isinstance(obj, Reimbursement):
+            role = getattr(user.role, 'name', '')
+
             if self.codename == 'submit_reimbursement_request':
                 return obj.requester == user
+
             elif self.codename in [
                 'approve_reimbursement_request',
                 'decline_reimbursement_request',
                 'view_reimbursement_request',
             ]:
-                 role = getattr(user.role, 'name', '')
-            return (
-                (role == 'Area Manager' and obj.store in user.assigned_stores.all())
-                or role == 'Internal Control'
-            )
+                return (
+                    (role == 'Area Manager' and obj.store in user.assigned_stores.all())
+                    or role == 'Internal Control'
+                )
 
-        return False
+            elif self.codename == 'disburse_reimbursement':
+                return role == 'Treasurer'
 
+    
+class IsSuperUserOrReadOnly(BasePermission):
+    def has_permission(self, request, view):
+        if request.method in SAFE_METHODS:
+            return True
+        return request.user and request.user.is_superuser
 
 # Specific permission classes for each use case
 class SubmitPurchaseRequest(BaseRolePermission):
@@ -113,8 +123,6 @@ class DeclinePurchaseRequest(BaseRolePermission):
 class ManageUsers(BaseRolePermission):
     codename = 'manage_users'
 
-class ApproveOverlimit(BaseRolePermission):
-    amount_threshold = purchase_limit.limit
 
 class ViewAnalytics(BaseRolePermission):
     codename = 'view_analytics'
@@ -135,6 +143,6 @@ class DeclineReimbursementRequest(BaseRolePermission):
     codename = 'decline_reimbursement_request'   # distinct from purchase
     object_permission = True
 
-class DisbureseReimbursementRequest(BaseRolePermission):
+class DisburseReimbursementRequest(BaseRolePermission):
     codename = 'disburse_reimbursement'   # distinct from purchase
     object_permission = True
