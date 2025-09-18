@@ -512,7 +512,7 @@ class ExportReimbursement(APIView):
                 rr.store.area_manager,
                 f"₦{rr.total_amount:,.2f}",
                 status_display,
-                rr.created_at.strftime('%Y-%m-%d')
+                rr.created_at.strftime('%Y-%m-%d'),
                 rr.bank,
                 rr.account
             ]
