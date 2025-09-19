@@ -2,6 +2,7 @@ from django.db import models
 from users.models import User
 from stores.models import Store
 from purchases.models import PurchaseRequest
+from banks.models import Bank, Account
 
 # Create your models here.
 STATUS_CHOICES = [
@@ -34,8 +35,8 @@ class Reimbursement(models.Model):
     disbursement_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     treasurer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='treasurer_reimbursements')
     disbursed_at = models.DateTimeField(null=True, blank=True)
-    bank = models.CharField(max_length=100, null=True, blank=True)
-    account = models.CharField(max_length=100, null=True, blank=True)
+    bank = models.ForeignKey(Bank, on_delete=models.SET_NULL, null=True, blank=True)
+    account = models.ForeignKey(Account, on_delete=models.SET_NULL, null=True, blank=True)
     # link to PRs (for items >= 5000)
     purchase_requests = models.ManyToManyField(PurchaseRequest, blank=True, related_name='reimbursements')
     def save(self, *args, user=None, **kwargs):
