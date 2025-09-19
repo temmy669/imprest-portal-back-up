@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from .models import *
 from .serializers import *
-from utils.permissions import ViewReimbursementRequest, SubmitReimbursementRequest, ApproveReimbursementRequest, DeclineReimbursementRequest
+from utils.permissions import ViewReimbursementRequest, SubmitReimbursementRequest, ApproveReimbursementRequest, DeclineReimbursementRequest, DisburseReimbursementRequest
 from helpers.response import CustomResponse
 from users.auth import JWTAuthenticationFromCookie
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -477,7 +477,7 @@ class ExportReimbursement(APIView):
         headers = []
         
         if user.role.name == 'Treasurer':
-            headers = ["Request ID", "Requester", "Region", "Store", "Area Manager", "Total Amount", "Status", "Date Created"]
+            headers = ["Request ID", "Requester", "Region", "Store", "Area Manager", "Total Amount", "Status", "Date Created", "Bank Name", "Account Name"]
             sheet.title = f"TRRs {start_date:%d-%m} to {end_date:%d-%m}"
             
         else:
@@ -512,7 +512,9 @@ class ExportReimbursement(APIView):
                 rr.store.area_manager,
                 f"₦{rr.total_amount:,.2f}",
                 status_display,
-                rr.created_at.strftime('%Y-%m-%d')
+                rr.created_at.strftime('%Y-%m-%d'),
+                rr.bank,
+                rr.account
             ]
                 file_name = f"Treasury_reimbursement_requests_{start_date.date()}_{end_date.date()}.xlsx"
                 
@@ -553,14 +555,15 @@ class ExportReimbursement(APIView):
 
 class DisbursemntView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
-    permission_classes = [IsAuthenticated, ApproveReimbursementRequest]
+    permission_classes = [IsAuthenticated, DisburseReimbursementRequest]
     
     # Disburse a reimbursement request and its items
     def post(self, request, pk):
         reimbursement = get_object_or_404(Reimbursement, pk=pk)
         
-       
-            
+        if reimbursement.disbursement_status != 'pending':
+            return CustomResponse(False, "The selected reimbursement is not a pending disbursement", 400)
+        
         reimbursement.disbursement_status = 'disbursed'
         reimbursement.treasurer = request.user
         reimbursement.bank = request.data.get('bank')
@@ -578,18 +581,22 @@ class DisbursemntView(APIView):
     
 class BulkDisbursemntView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
-    permission_classes = [IsAuthenticated, ApproveReimbursementRequest]
+    permission_classes = [IsAuthenticated, DisburseReimbursementRequest]
     
     # Bulk Disburse reimbursement requests and their items
     def post(self, request):
-        ids = request.data.get('ids', [])
+        ids = request.data.get('reimbursement_ids', [])
         if not isinstance(ids, list) or not all(isinstance(i, int) for i in ids):
             return CustomResponse(False, "Invalid 'ids' format. Must be a list of integers.", 400)
+        
+        
         
         reimbursements = Reimbursement.objects.filter(id__in=ids, internal_control_status='approved', disbursement_status='pending')
         updated_count = 0
         
         for reimbursement in reimbursements:
+            if reimbursement.disbursement_status != 'pending':
+                continue  # skip non-pending disbursements
             reimbursement.disbursement_status = 'disbursed'
             reimbursement.treasurer = request.user
             reimbursement.bank = request.data.get('bank')
