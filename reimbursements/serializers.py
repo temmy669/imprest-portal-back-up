@@ -107,6 +107,8 @@ class ReimbursementSerializer(serializers.ModelSerializer):
         rep['request_id'] = f"RR-{instance.id:04d}"
         rep['role'] = instance.requester.role.name if instance.requester.role else None
         rep['total_amount'] = f"₦{instance.total_amount:,.2f}"
+        rep['bank'] = instance.bank.bank_name if instance.bank else None
+        rep['account'] = instance.account.account_name if instance.account else None
         
 
         if instance.area_manager_approved_at:
