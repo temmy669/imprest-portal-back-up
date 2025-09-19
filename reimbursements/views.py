@@ -566,8 +566,10 @@ class DisbursemntView(APIView):
         
         reimbursement.disbursement_status = 'disbursed'
         reimbursement.treasurer = request.user
-        reimbursement.bank = request.data.get('bank')
-        reimbursement.account = request.data.get('account')
+        bank_id = request.data.get('bank')
+        account_id = request.data.get('account')
+        reimbursement.bank = get_object_or_404(Bank, id=bank_id)
+        reimbursement.account = get_object_or_404(Account, id=account_id)
         reimbursement.disbursed_at = timezone.now()
            
             
