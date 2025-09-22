@@ -509,12 +509,12 @@ class ExportReimbursement(APIView):
                 f"{rr.requester.first_name} {rr.requester.last_name}",
                 rr.store.region.name if rr.store and rr.store.region else "",
                 rr.store.name if rr.store else "",
-                rr.store.area_manager,
+                f"{rr.store.area_manager.first_name} {rr.store.area_manager.last_name}" if rr.store and rr.store.area_manager else "",
                 f"₦{rr.total_amount:,.2f}",
                 status_display,
                 rr.created_at.strftime('%Y-%m-%d'),
-                rr.bank,
-                rr.account
+                rr.bank.bank_name if rr.bank else "",
+                rr.account.account_name if rr.account else "",
             ]
                 file_name = f"Treasury_reimbursement_requests_{start_date.date()}_{end_date.date()}.xlsx"
                 
@@ -586,6 +586,7 @@ class BulkDisbursemntView(APIView):
     permission_classes = [IsAuthenticated, DisburseReimbursementRequest]
     
     # Bulk Disburse reimbursement requests and their items
+    #ids refers to id of the selected reimbursement requests
     def post(self, request):
         ids = request.data.get('reimbursement_ids', [])
         if not isinstance(ids, list) or not all(isinstance(i, int) for i in ids):
