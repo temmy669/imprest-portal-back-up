@@ -152,7 +152,7 @@ def send_reimbursement_approval_notification(reimbursement, user):
     
     requester = User.objects.get(id=reimbursement.requester_id)
     
-    if user.role.name == "Area Mnanager":
+    if user.role.name == "Area Manager":
         name = requester.get_full_name()
         approved_by = reimbursement.area_manager.get_full_name() if reimbursement.area_manager else "N/A"
         approval_date = reimbursement.area_manager_approved_at
@@ -172,7 +172,7 @@ def send_reimbursement_approval_notification(reimbursement, user):
         'name': name,
         'store_name': reimbursement.store.name,
         'store_code': reimbursement.store.code,
-        'approvedby_name': reimbursement.area_manager.get_full_name(),
+        'area_manager_approvedby_name': reimbursement.area_manager.get_full_name(),
         'internal_control_approvedby_name': reimbursement.internal_control.get_full_name() if reimbursement.internal_control else "N/A",
         'total_amount': f"₦{reimbursement.total_amount:,.2f}",
         'items': reimbursement.items.all(),
