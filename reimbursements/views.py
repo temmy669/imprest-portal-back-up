@@ -584,7 +584,7 @@ class DisbursemntView(APIView):
 
         return CustomResponse(True, message, 200)
     
-class BulkDisbursemntView(APIView):
+class BulkDisbursementView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
     permission_classes = [IsAuthenticated, DisburseReimbursementRequest]
     
@@ -597,7 +597,7 @@ class BulkDisbursemntView(APIView):
         
         
         
-        reimbursements = Reimbursement.objects.filter(id__in=ids, internal_control_status='approved', disbursement_status='pending')
+        reimbursements = Reimbursement.objects.filter(id__in=ids)
         updated_count = 0
         
         for reimbursement in reimbursements:
@@ -605,8 +605,10 @@ class BulkDisbursemntView(APIView):
                 continue  # skip non-pending disbursements
             reimbursement.disbursement_status = 'disbursed'
             reimbursement.treasurer = request.user
-            reimbursement.bank = request.data.get('bank')
-            reimbursement.account = request.data.get('account')
+            bank_id = request.data.get('bank')
+            account_id = request.data.get('account')
+            reimbursement.bank = get_object_or_404(Bank, id=bank_id)
+            reimbursement.account = get_object_or_404(Account, id=account_id)
             reimbursement.disbursed_at = timezone.now()
             reimbursement.updated_by = request.user
             reimbursement.save(user=request.user)

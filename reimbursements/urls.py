@@ -8,7 +8,7 @@ from .views import (
     DeclineReimbursementItemView,
     ExportReimbursement,
     DisbursemntView,
-    BulkDisbursemntView
+    BulkDisbursementView
 
 )   
 from django.conf import settings
@@ -40,7 +40,7 @@ urlpatterns = [
 
     # Disburse reimbursement
     path('reimbursements/<int:pk>/disburse/', DisbursemntView.as_view(), name='disburse-reimbursement'),
-    path('reimbursements/bulk-disburse/', BulkDisbursemntView.as_view(), name='bulk-disburse-reimbursements'),
+    path('reimbursements/bulk-disburse/', BulkDisbursementView.as_view(), name='bulk-disburse-reimbursements'),
 ]
 
 if settings.DEBUG:
