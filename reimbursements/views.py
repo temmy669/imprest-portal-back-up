@@ -116,9 +116,14 @@ class ReimbursementRequestView(APIView):
         # Calculate status counts for just this page
         if user.role.name == 'Treasurer':
             status_list = [obj.disbursement_status for obj in (paginated_queryset or [])]
+            print(status_list)
         
-        else:
-            status_list = [obj.status for obj in (paginated_queryset or [])]
+        elif user.role.name == 'Internal Control':
+            status_list = [obj.internal_control_status for obj in (paginated_queryset or [])]
+            print(status_list)
+            
+        # else:
+        #     status_list = [obj.status for obj in (paginated_queryset or [])]
         
         status_count_dict = dict(Counter(status_list))
         
