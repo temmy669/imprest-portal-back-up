@@ -429,131 +429,148 @@ class ExportReimbursement(APIView):
     permission_classes = [IsAuthenticated, ViewReimbursementRequest]
 
     def get(self, request):
-        start_date = request.query_params.get('start_date')
-        end_date = request.query_params.get('end_date')
-        status = request.query_params.get('status')
-        
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+        status = request.query_params.get("status")
+
         user = request.user
         reimbursement = Reimbursement.objects.all()
 
+        # validate inputs
         if not start_date or not end_date or not status:
             return CustomResponse(False, "start_date, end_date and status are required", 400)
 
         try:
-            start_date = datetime.strptime(start_date, '%Y-%m-%d')
-            end_date = datetime.strptime(end_date, '%Y-%m-%d')
+            start_date = datetime.strptime(start_date, "%Y-%m-%d")
+            end_date = datetime.strptime(end_date, "%Y-%m-%d")
         except ValueError:
             return CustomResponse(False, "Invalid date format. Use YYYY-MM-DD", 400)
 
         if start_date > end_date:
             return CustomResponse(False, "start_date cannot be after end_date", 400)
 
-        
-        # Filter queryset based on role
-        if user.role.name == 'Area Manager':
+        # role-based queryset
+        if user.role.name == "Area Manager":
             queryset = reimbursement.filter(
                 store__in=user.assigned_stores.all(),
                 created_at__date__gte=start_date.date(),
                 created_at__date__lte=end_date.date(),
-                status__iexact=status
+                status__iexact=status,
             )
-        elif user.role.name == 'Internal Control':
-            queryset = reimbursement.filter(
-                status='approved',
-                created_at__date__gte=start_date.date(),
-                created_at__date__lte=end_date.date(),
-                internal_control_status__iexact=status
-            )
-        elif user.role.name == 'Treasurer':
-            queryset = reimbursement.filter(
-                internal_control_status='approved',
-                created_at__date__gte=start_date.date(),
-                created_at__date__lte=end_date.date(),
-                disbursement_status__iexact=status
-            )
+            headers = ["Request ID", "Requester", "Store", "Total Amount", "Status", "Date Created"]
+            file_name = f"AM_reimbursement_requests_{start_date.date()}_{end_date.date()}.xlsx"
 
-        # Create workbook
+        elif user.role.name == "Internal Control":
+            queryset = reimbursement.filter(
+                status="approved",
+                created_at__date__gte=start_date.date(),
+                created_at__date__lte=end_date.date(),
+                internal_control_status__iexact=status,
+            )
+            headers = ["Request ID", "Requester", "Store", "Total Amount", "Status", "Date Created"]
+            file_name = f"IC_reimbursement_requests_{start_date.date()}_{end_date.date()}.xlsx"
+
+        elif user.role.name == "Treasurer":
+            queryset = reimbursement.filter(
+                internal_control_status="approved",
+                created_at__date__gte=start_date.date(),
+                created_at__date__lte=end_date.date(),
+                disbursement_status__iexact=status,
+            )
+            headers = [
+                "Request ID",
+                "Requester",
+                "Region",
+                "Store",
+                "Area Manager",
+                "Total Amount",
+                "Status",
+                "Date Created",
+                "Bank Name",
+                "Account Name",
+            ]
+            file_name = f"Treasury_reimbursement_requests_{start_date.date()}_{end_date.date()}.xlsx"
+
+        elif user.role.name == "Restaurant Manager":
+            queryset = reimbursement.filter(
+                requester=user,
+                created_at__date__gte=start_date.date(),
+                created_at__date__lte=end_date.date(),
+                status__iexact=status,
+            )
+            headers = ["Request ID", "Store", "Total Amount", "Status", "Date Created"]
+            file_name = f"RM_reimbursement_requests_{start_date.date()}_{end_date.date()}.xlsx"
+
+        else:
+            return CustomResponse(False, "You are not allowed to export reimbursements", 403)
+
+        # workbook
         workbook = openpyxl.Workbook()
         sheet = workbook.active
-
-       
-        headers = []
-        
-        if user.role.name == 'Treasurer':
-            headers = ["Request ID", "Requester", "Region", "Store", "Area Manager", "Total Amount", "Status", "Date Created", "Bank Name", "Account Name"]
-            sheet.title = f"TRRs {start_date:%d-%m} to {end_date:%d-%m}"
-            
-        else:
-            headers = ["Request ID", "Requester", "Store", "Total Amount", "Status", "Date Created"]
-             # Keep title <= 31 chars
-            sheet.title = f"RRs {start_date:%d-%m} to {end_date:%d-%m}"
-        
+        sheet.title = f"RRs {start_date:%d-%m} to {end_date:%d-%m}"
         sheet.append(headers)
 
-               # Add rows
+        # rows
         for rr in queryset:
-            if user.role.name == 'Internal Control':
-                status_display = rr.internal_control_status.capitalize()
-                
+            if user.role.name == "Internal Control":
                 row = [
-                f"RR-{rr.id:04d}",
-                f"{rr.requester.first_name} {rr.requester.last_name}",
-                rr.store.name if rr.store else "",
-                f"₦{rr.total_amount:,.2f}",
-                status_display,
-                rr.created_at.strftime('%Y-%m-%d'),
-            ]
-                file_name = f"IC_reimbursement_requests_{start_date.date()}_{end_date.date()}.xlsx"
-                
-            elif user.role.name == 'Treasurer':
-                status_display = rr.disbursement_status.capitalize()
+                    f"RR-{rr.id:04d}",
+                    f"{rr.requester.first_name} {rr.requester.last_name}",
+                    rr.store.name if rr.store else "",
+                    rr.total_amount, 
+                    rr.internal_control_status.capitalize(),
+                    rr.created_at.strftime("%Y-%m-%d")
+                ]
+
+            elif user.role.name == "Treasurer":
                 row = [
-                f"RR-{rr.id:04d}",
-                f"{rr.requester.first_name} {rr.requester.last_name}",
-                rr.store.region.name if rr.store and rr.store.region else "",
-                rr.store.name if rr.store else "",
-                f"{rr.store.area_manager.first_name} {rr.store.area_manager.last_name}" if rr.store and rr.store.area_manager else "",
-                f"₦{rr.total_amount:,.2f}",
-                status_display,
-                rr.created_at.strftime('%Y-%m-%d'),
-                rr.bank.bank_name if rr.bank else "",
-                rr.account.account_name if rr.account else "",
-            ]
-                file_name = f"Treasury_reimbursement_requests_{start_date.date()}_{end_date.date()}.xlsx"
-                
-            else:
-                status_display = rr.status.capitalize()
+                    f"RR-{rr.id:04d}",
+                    f"{rr.requester.first_name} {rr.requester.last_name}",
+                    rr.store.region.name if rr.store and rr.store.region else "",
+                    rr.store.name if rr.store else "",
+                    f"{rr.store.area_manager.first_name} {rr.store.area_manager.last_name}"
+                    if rr.store and rr.store.area_manager
+                    else "",
+                    rr.total_amount,
+                    rr.disbursement_status.capitalize(),
+                    rr.created_at.strftime("%Y-%m-%d"),
+                    rr.bank.bank_name if rr.bank else "",
+                    rr.account.account_name if rr.account else "",
+                ]
+
+            elif user.role.name == "Area Manager":
                 row = [
-                f"RR-{rr.id:04d}",
-                f"{rr.requester.first_name} {rr.requester.last_name}",
-                rr.store.name if rr.store else "",
-                f"₦{rr.total_amount:,.2f}",
-                status_display,
-                rr.created_at.strftime('%Y-%m-%d'),
-            ]
-                file_name = f"reimbursement_requests_{start_date.date()}_{end_date.date()}.xlsx"
-                
-            
+                    f"RR-{rr.id:04d}",
+                    f"{rr.requester.first_name} {rr.requester.last_name}",
+                    rr.store.name if rr.store else "",
+                    rr.total_amount,
+                    rr.status.capitalize(),
+                    rr.created_at.strftime("%Y-%m-%d"),
+                ]
+
+            else:  # Restaurant Manager
+                row = [
+                    f"RR-{rr.id:04d}",
+                    rr.store.name if rr.store else "",
+                    rr.total_amount,
+                    rr.status.capitalize(),
+                    rr.created_at.strftime("%Y-%m-%d"),
+                ]
+
             sheet.append(row)
 
-        # Adjust column widths
+        # auto column widths
         for col in sheet.columns:
-            max_length = 0
-            column = col[0].column_letter
-            for cell in col:
-                if cell.value:
-                    max_length = max(max_length, len(str(cell.value)))
-            sheet.column_dimensions[column].width = max_length + 2
+            max_length = max((len(str(cell.value)) for cell in col if cell.value), default=0)
+            sheet.column_dimensions[col[0].column_letter].width = max_length + 2
 
-       
+        # build response
         response = HttpResponse(
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
         response["Content-Disposition"] = f'attachment; filename="{file_name}"'
-
-        workbook.save(response)  # Write workbook to response
+        workbook.save(response)
         return response
-    
 
 
 class DisbursemntView(APIView):
@@ -614,6 +631,6 @@ class BulkDisbursementView(APIView):
             reimbursement.save(user=request.user)
             updated_count += 1
         
-        return CustomResponse(True, f"{updated_count} reimbursements disbursed successfully", 200)
+        return CustomResponse(True, f"{updated_count} reimbursement(s) disbursed successfully", 200)
     
         
