@@ -1,6 +1,6 @@
 from django.shortcuts import render
 from rest_framework.views import APIView
-from utils.permissions import ManageUsers
+from utils.permissions import IsSuperUserOrReadOnly
 from rest_framework.permissions import IsAuthenticated
 from users.auth import JWTAuthenticationFromCookie
 from django.shortcuts import get_object_or_404
@@ -12,7 +12,7 @@ from .serializers import ItemSerializer
 
 class ExpenseItemView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
-    permission_classes = [IsAuthenticated, ManageUsers]
+    permission_classes = [IsAuthenticated, IsSuperUserOrReadOnly]
     
     def get(self, request):
         items = ExpenseItem.objects.all()
@@ -49,7 +49,7 @@ class ExpenseItemView(APIView):
         return CustomResponse(True, "Item Deleted Successfully", 200)
 
         
-        
+
         
         
     
