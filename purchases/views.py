@@ -126,6 +126,13 @@ class UpdatePurchaseRequestLimit(APIView):
             return CustomResponse(True, "Limit updated successfully", 200, {'limit': config.limit})
         return CustomResponse(False, serializer.errors, 400)
     
+    def get(self, request):
+        try:
+            config = LimitConfig.objects.get(id=1)
+            return CustomResponse(True, "Limit retrieved successfully", 200, {'limit': config.limit})
+        except LimitConfig.DoesNotExist:
+            return CustomResponse(False, "Limit configuration not found", 404)
+    
 
 class ListApprovedPurchaseRequestView(APIView):
     """
