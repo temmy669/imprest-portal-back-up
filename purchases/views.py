@@ -112,7 +112,7 @@ class UpdatePurchaseRequestLimit(APIView):
     """Updates the minimum limit for items in a purchase request"""
     
     authentication_classes = [JWTAuthenticationFromCookie]
-    permission_classes = [IsAuthenticated, ManageUsers]
+    permission_classes = [IsAuthenticated, IsSuperUserOrReadOnly]
     
     def put(self, request):
         serializer = LimitConfigSerializer(data=request.data)
