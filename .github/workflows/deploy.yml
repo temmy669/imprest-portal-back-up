@@ -31,7 +31,7 @@ jobs:
           # Initialize git repo if it doesn'\''t exist
           if [ ! -d .git ]; then
             git init
-            git remote add origin https://github.com/${{ github.repository }}.git
+            git remote add origin git@github.com:${{ github.repository }}.git
           fi
 
           # Pull latest changes
@@ -51,15 +51,10 @@ jobs:
 
           pip install -r requirements.txt
 
-          # Run Django management commands
-          python manage.py migrate || echo "Migration failed or no migrations needed"
-          python manage.py collectstatic --noinput || echo "Static files collection failed"
+          # Use our custom restart script for migrations, static files, and service restarts
+          restart_app
 
-          # Restart services (remove sudo since we are already root)
-          systemctl restart celery || echo "Celery restart failed"
-          systemctl reload nginx || echo "Nginx reload failed"
-
-          echo "Deployment completed successfully"
+          echo "🎉 Deployment completed successfully!"
         '
 
     - name: Health check
