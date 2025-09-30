@@ -26,13 +26,16 @@ jobs:
     - name: Deploy code to server
       run: |
         # Create deployment archive excluding unnecessary files
+        # Use --warning=no-file-changed to handle files modified during archiving
         tar --exclude='.git' \
             --exclude='node_modules' \
             --exclude='__pycache__' \
             --exclude='*.pyc' \
             --exclude='.env' \
             --exclude='venv' \
-            -czf deploy.tar.gz .
+            --exclude='.github' \
+            --warning=no-file-changed \
+            -czf deploy.tar.gz . || [ $? -eq 1 ]
 
         # Copy deployment archive to server
         scp -o StrictHostKeyChecking=no deploy.tar.gz root@159.198.36.136:/tmp/
