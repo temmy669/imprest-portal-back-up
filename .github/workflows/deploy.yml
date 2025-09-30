@@ -1,0 +1,43 @@
+name: Deploy to Production Server
+
+on:
+  push:
+    branches: [ feature/response ]
+  # pull_request:
+  #   branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup SSH
+      uses: webfactory/ssh-agent@v0.7.0
+      with:
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+    - name: Add server to known hosts
+      run: |
+        ssh-keyscan -H 159.198.36.136 >> ~/.ssh/known_hosts
+
+    - name: Deploy to server
+      run: |
+        ssh root@159.198.36.136 '
+          cd /var/www/fcimprestportal
+          git pull origin main || git clone https://github.com/${{ github.repository }}.git .
+          source venv/bin/activate
+          pip install -r requirements.txt
+          python manage.py migrate
+          python manage.py collectstatic --noinput
+          sudo systemctl restart gunicorn
+          sudo systemctl restart celery
+          sudo systemctl reload nginx
+        '
+
+    - name: Health check
+      run: |
+        sleep 3
+        curl -f https://fcimprestportal.xyz || exit 1
