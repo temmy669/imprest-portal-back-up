@@ -23,20 +23,33 @@ jobs:
         mkdir -p ~/.ssh
         ssh-keyscan -H 159.198.36.136 >> ~/.ssh/known_hosts
 
-    - name: Deploy to server
+    - name: Deploy code to server
       run: |
+        # Create deployment archive excluding unnecessary files
+        tar --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='.env' \
+            --exclude='venv' \
+            -czf deploy.tar.gz .
+
+        # Copy deployment archive to server
+        scp -o StrictHostKeyChecking=no deploy.tar.gz root@159.198.36.136:/tmp/
+
+        # Extract and deploy on server
         ssh -o StrictHostKeyChecking=no root@159.198.36.136 '
           cd /var/www/fcimprestportal || exit 1
 
-          # Initialize git repo if it doesn'\''t exist
-          if [ ! -d .git ]; then
-            git init
-            git remote add origin git@github.com:${{ github.repository }}.git
+          # Backup current deployment (keep venv and staticfiles)
+          if [ -f manage.py ]; then
+            echo "📦 Backing up current deployment..."
+            tar --exclude=venv --exclude=staticfiles --exclude=media -czf /tmp/backup-$(date +%Y%m%d-%H%M%S).tar.gz .
           fi
 
-          # Pull latest changes
-          git fetch origin ${{ github.ref_name }}
-          git reset --hard origin/${{ github.ref_name }}
+          # Extract new code (preserve venv, staticfiles, media directories)
+          echo "🚀 Deploying new code..."
+          tar --exclude=venv --exclude=staticfiles --exclude=media -xzf /tmp/deploy.tar.gz
 
           # Activate virtual environment and install dependencies
           source venv/bin/activate
@@ -53,6 +66,9 @@ jobs:
 
           # Use our custom restart script for migrations, static files, and service restarts
           restart_app
+
+          # Cleanup
+          rm -f /tmp/deploy.tar.gz
 
           echo "🎉 Deployment completed successfully!"
         '
