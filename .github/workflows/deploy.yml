@@ -2,8 +2,8 @@ name: Deploy to Production Server
 
 on:
   push:
-    branches: [ feature/response ]
-    # branches: [ main, feature/response ]
+    # branches: [ feature/response ]
+    branches: [main]
 
 jobs:
   deploy:
