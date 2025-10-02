@@ -223,7 +223,7 @@ def send_reimbursement_rejection_notification(reimbursement, user):
     items = reimbursement.items.all()
     requester = User.objects.get(id=reimbursement.requester_id)
     
-    if user.role.name == "Area Mnanager":
+    if user.role.name == "Area Manager":
         name = requester.get_full_name()
         rejector = reimbursement.area_manager.get_full_name() if reimbursement.area_manager else "N/A"
         comments =  reimbursement.comments.filter(author=reimbursement.area_manager).order_by('-created_at').first()
