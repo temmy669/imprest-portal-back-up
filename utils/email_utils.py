@@ -9,7 +9,9 @@ def send_approval_notification(purchase_request):
     """
     Sends approval notification to requester with complete request details
     """
-    requester = User.objects.get(id=purchase_request.requester_id)
+    requester = purchase_request.requester_id
+    # print(html_message)
+   
     
     # Build context for email template
     context = {
@@ -30,33 +32,36 @@ def send_approval_notification(purchase_request):
     # Render HTML and plain text versions
     html_message = render_to_string('pr_approval.html', context)
     plain_message = strip_tags(html_message)
-    print(html_message)
-    
+  
+   
     # Send email
     send_mail(
         subject=f"Purchase Request Approved - {context['request_id']}",
         message=plain_message,
         from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[requester.email],
+        recipient_list=[purchase_request.requester.email],
         html_message=html_message,
         fail_silently=False
     )
 
-def send_rejection_notification(purchase_request):
+def send_rejection_notification(purchase_request, comment):
     """
     Sends rejection notification with reason
     """
-    requester = User.objects.get(id=purchase_request.requester_id)
+    requester = purchase_request.requester
     
     items = purchase_request.items.all()
-    comments =  Comment.objects.filter(user=purchase_request.area_manager, request=purchase_request).order_by('-created_at').first()
+    
+   
+    print("Comments Queryset:", comment)
+    print("Selected Comment:", comment)
     
     context = {
         'request_id': f"PR-{purchase_request.id:04d}",
         'requester_name': requester.get_full_name(),
         'voucher_id': getattr(purchase_request, 'voucher_id'),
         'rejector_name': purchase_request.area_manager.get_full_name(),
-        'rejection_reason': comments.text if comments else "No reason provided.",
+        'rejection_reason': comment.text if comment else "No reason provided.",
         'items': items, 
         'rejection_date': purchase_request.area_manager_declined_at.strftime("%b %d, %Y %I:%M %p"),
         'company_name': settings.COMPANY_NAME,
@@ -74,7 +79,7 @@ def send_rejection_notification(purchase_request):
         subject=f"Purchase Request Declined - {context['request_id']}",
         message=plain_message,
         from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[requester.email],
+        recipient_list=[purchase_request.requester.email],
         html_message=html_message
     )
     
@@ -213,7 +218,7 @@ def send_reimbursement_approval_notification(reimbursement, user):
         fail_silently=False
     )
     
-def send_reimbursement_rejection_notification(reimbursement, user):
+def send_reimbursement_rejection_notification(reimbursement, user, comment):
     """
     Sends rejection notification with reason
     """
@@ -226,7 +231,7 @@ def send_reimbursement_rejection_notification(reimbursement, user):
     if user.role.name == "Area Manager":
         name = requester.get_full_name()
         rejector = reimbursement.area_manager.get_full_name() if reimbursement.area_manager else "N/A"
-        comments =  reimbursement.comments.filter(author=reimbursement.area_manager).order_by('-created_at').first()
+        # comments =  reimbursement.comments.filter(author=reimbursement.area_manager).order_by('-created_at').first()
         rejection_date = reimbursement.area_manager_declined_at
         status = reimbursement.get_status_display()
         request_date = reimbursement.created_at.strftime("%b %d, %Y %I:%M %p"),
@@ -234,7 +239,7 @@ def send_reimbursement_rejection_notification(reimbursement, user):
     elif user.role.name == "Internal Control":
         name = area_manager.get_full_name()
         rejector = reimbursement.internal_control.get_full_name() if reimbursement.internal_control else "N/A"
-        comments =  reimbursement.comments.filter(author=reimbursement.internal_control).order_by('-created_at').first()
+        # comments =  reimbursement.comments.filter(author=reimbursement.internal_control).order_by('-created_at').first()
         rejection_date = reimbursement.internal_control_declined_at
         status = reimbursement.get_internal_control_status_display()
         request_date = reimbursement.area_manager_approval_date.strftime("%b %d, %Y %I:%M %p") if reimbursement.area_manager_approval_date else "N/A",
@@ -243,7 +248,7 @@ def send_reimbursement_rejection_notification(reimbursement, user):
         'request_id': f"RR-{reimbursement.id:04d}",
         'name':name,
         'rejector_name': rejector,
-        'rejection_reason': comments.text if comments else "No reason provided.",
+        'rejection_reason': comment.text if comment else "No reason provided.",
         'items': items, 
         'rejection_date': rejection_date,
         'company_name': settings.COMPANY_NAME,

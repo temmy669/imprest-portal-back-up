@@ -19,7 +19,7 @@ class PurchaseRequest(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     area_manager_approved_at = models.DateTimeField(null=True, blank=True)
     area_manager_declined_at = models.DateTimeField(null=True, blank=True)
-    comment = models.TextField(blank=True, null=True)
+    # comment = models.TextField(blank=True, null=True)
     voucher_id = models.CharField(max_length=100, default='not issued', blank=True, null=True)
     created = models.BooleanField(default=True)
     # NEW: Tracking who made which decision
@@ -56,7 +56,7 @@ class PurchaseRequestItem(models.Model):
 class Comment(models.Model):
     request = models.ForeignKey(PurchaseRequest, on_delete=models.CASCADE, related_name='comments')
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    text = models.TextField()
+    text = models.CharField(max_length=500)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
