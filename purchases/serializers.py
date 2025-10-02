@@ -21,12 +21,12 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
     items = PurchaseRequestItemSerializer(many=True)
     requester = serializers.StringRelatedField()
     status_display = serializers.CharField(source='get_status_display', read_only=True)
-    
+    comments = CommentSerializer(many=True, required=False)
     class Meta:
         model = PurchaseRequest
         fields = [
             'id', 'requester', 'store', 'status', 'status_display', 
-            'total_amount', 'comment', 'items',
+            'total_amount', 'comments', 'items',
         ]
         read_only_fields = ['total_amount', 'requester_email', 'role', 'requester_phone', 'store_code', 'request_date', 'request_id', 'comments', 'voucher_id','approved_by', 'approval_date']
     
@@ -67,13 +67,18 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         items_data = validated_data.pop('items')
+        comments_data = validated_data.pop('comments', [])
         request = PurchaseRequest.objects.create(**validated_data)
-        
+        user = self.context['request'].user
+    
         for item_data in items_data:
             PurchaseRequestItem.objects.create(request=request, **item_data)
-        
+    
+        for comment_data in comments_data:
+            Comment.objects.create(request=request, user=user, **comment_data)
+    
         return request
-
+    
 class LimitConfigSerializer(serializers.ModelSerializer):
     class Meta:
         model = LimitConfig

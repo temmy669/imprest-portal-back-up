@@ -27,7 +27,8 @@ def handle_reimbursement_request_status_change(sender, instance, **kwargs):
         if instance.status == "approved":
             send_reimbursement_approval_notification(instance, user)
         elif instance.status == "declined":
-            send_reimbursement_rejection_notification(instance, user)
+            latest_comment = instance.comments.order_by('-created_at').first()
+            send_reimbursement_rejection_notification(instance, user, latest_comment)
 
     # --- Internal Control updates internal_control_status ---
     elif role == "Internal control person" and old_instance.internal_control_status != instance.internal_control_status:
