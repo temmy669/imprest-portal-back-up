@@ -124,7 +124,7 @@ class ReimbursementSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         items_data = validated_data.pop('items')
         comments_data = validated_data.pop('comments', [])
-        # user = self.context['request'].user
+        user = self.context['request'].user
         # validated_data['requester'] = user
         
 

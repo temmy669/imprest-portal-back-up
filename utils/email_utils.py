@@ -100,6 +100,7 @@ def send_creation_notification(purchase_request):
     plain_message = strip_tags(html_message)
     
     send_mail(
+        
         subject=f"Purchase Request Created - {context['request_id']}",
         message=plain_message,
         from_email=settings.DEFAULT_FROM_EMAIL,
