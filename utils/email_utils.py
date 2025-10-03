@@ -9,7 +9,7 @@ def send_approval_notification(purchase_request):
     """
     Sends approval notification to requester with complete request details
     """
-    requester = purchase_request.requester_id
+    requester = purchase_request.requester
     # print(html_message)
    
     
