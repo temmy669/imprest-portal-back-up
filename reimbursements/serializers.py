@@ -155,21 +155,21 @@ class ReimbursementSerializer(serializers.ModelSerializer):
             reimbursement.items.filter(requires_receipt=True, receipt="")
         )
 
-        if missing_qs.exists():
-            raise serializers.ValidationError({
-                "detail": "Some items require receipt before submission.",
+        # if missing_qs.exists():
+        #     raise serializers.ValidationError({
+        #         "detail": "Some items require receipt before submission.",
                 
-                "items_missing_receipts": [
-                    {
-                        "item_id": it.id,
-                        "item_name": it.item_name,
-                        "unit_price": str(it.unit_price),
-                        "quantity": it.quantity,
-                        "item_total": str(it.item_total),
-                    }
-                    for it in missing_qs
-                ]
-            })
+        #         "items_missing_receipts": [
+        #             {
+        #                 "item_id": it.id,
+        #                 "item_name": it.item_name,
+        #                 "unit_price": str(it.unit_price),
+        #                 "quantity": it.quantity,
+        #                 "item_total": str(it.item_total),
+        #             }
+        #             for it in missing_qs
+        #         ]
+        #     })
 
         # finalize
         reimbursement.is_draft = False

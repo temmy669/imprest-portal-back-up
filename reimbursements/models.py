@@ -48,7 +48,7 @@ class Reimbursement(models.Model):
     
 class ReimbursementItem(models.Model):
     reimbursement = models.ForeignKey(Reimbursement, on_delete=models.CASCADE, related_name='items')
-    purchase_request_ref = models.CharField(max_length=100, blank=True, null=True, unique=True)
+    purchase_request_ref = models.CharField(max_length=100, blank=True, null=True)
     gl_code = models.CharField(max_length=50, blank=True, null=True)
     item_name = models.CharField(max_length=255)
     transportation_from = models.CharField(max_length=255, default='Not Applicable')
