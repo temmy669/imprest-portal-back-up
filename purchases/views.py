@@ -261,7 +261,7 @@ class DeclinePurchaseRequestView(APIView):
         
         # Update all items to declined
         purchase_request_items = pr.items.all()
-        purchase_request_items.update(status='approved')
+        purchase_request_items.update(status='declined')
         
 
         # Create decline comment
