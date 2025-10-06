@@ -85,11 +85,13 @@ class LimitConfigSerializer(serializers.ModelSerializer):
         fields = ['limit']
     
 class ApprovedPurchaseRequestSerializer(serializers.ModelSerializer):
+    items = PurchaseRequestItemSerializer(many=True, read_only=True)
+
     """List serializer for approved purchase requests"""
     
     class Meta:
         model = PurchaseRequest
-        fields = ['voucher_id']
+        fields = ['voucher_id', 'items']
         read_only_fields = ['voucher_id', 'request_name']
 
     def to_representation(self, instance):
