@@ -33,7 +33,6 @@ class StoreListView(APIView):
     
     
 
-
 class RegionListView(APIView):
     serializer_class = RegionSerializer()
     """
@@ -58,7 +57,7 @@ class RegionListView(APIView):
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(True, "Region Added", data=serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return CustomResponse(False, serializer.errors, 400)
 
 
 class StoreByRegionView(APIView):
@@ -179,7 +178,7 @@ class StoreBudgetView(APIView):
                 store.save(update_fields=['balance'])
 
             return CustomResponse(True, "Store added", data=serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return CustomResponse(False, serializer.errors, 400)
 
 
     def put(self, request, pk):

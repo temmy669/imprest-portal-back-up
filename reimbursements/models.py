@@ -62,7 +62,6 @@ class ReimbursementItem(models.Model):
     requires_receipt = models.BooleanField(default=False)
    
     
-
 class ReimbursementComment(models.Model):
     reimbursement = models.ForeignKey(Reimbursement, on_delete=models.CASCADE, related_name='comments')
     author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
