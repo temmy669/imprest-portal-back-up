@@ -19,6 +19,13 @@ urlpatterns = [
         PurchaseRequestView.as_view(),
         name='purchase-request-list-create'
     ),
+    
+    # Update a purchase request
+    path(
+        '<int:pk>/',
+        PurchaseRequestView.as_view(),
+        name='purchase-request-detail'
+    ),
 
     # Approve a purchase request
     path(

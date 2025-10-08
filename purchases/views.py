@@ -45,9 +45,15 @@ class PurchaseRequestView(APIView):
         # Restaurant Managers only see their own requests
         if user.role.name == 'Restaurant Manager':
             queryset = queryset.filter(requester=user)
+            
         # Area Managers see requests from their stores
         elif user.role.name == 'Area Manager':
-            queryset = queryset.filter(store__region=user.region)
+            queryset = queryset.filter(store__in=user.assigned_stores.all())
+            
+        status = request.query_params.get("status")
+        
+        if status:
+            queryset = queryset.filter(status__iexact=status)
             
     
        # Paginate the queryset
@@ -101,7 +107,7 @@ class PurchaseRequestView(APIView):
         pr = get_object_or_404(PurchaseRequest, pk=pk)
 
 
-        serializer = PurchaseRequestSerializer(pr, data=request.data, partial=True)
+        serializer = UpdatePurchaseRequestSerializer(pr, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(True, serializer.data, 200)
@@ -214,7 +220,7 @@ class ApprovePurchaseRequestItemView(APIView):
             pr.status = 'declined'
             pr.area_manager = request.user
             pr.area_manager_declined_at = timezone.now()
-            pr.save(user=request.user)
+            pr.save()
             
          # Check if all items are approved
         elif all(i.status == 'approved' for i in items):
@@ -222,7 +228,7 @@ class ApprovePurchaseRequestItemView(APIView):
             pr.voucher_id = f"PV-000{pr.id}-{pr.created_at.strftime('%Y-%m-%d')}"
             pr.area_manager = request.user
             pr.area_manager_approved_at = timezone.now()
-            pr.save(user=request.user)
+            pr.save()
 
         return CustomResponse(True,
             {
