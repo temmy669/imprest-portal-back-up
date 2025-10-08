@@ -186,7 +186,7 @@ class UploadReceiptView(APIView):
             return CustomResponse(False, "No receipt file provided.", 400)
         receipt_file = request.FILES['receipt']
 
-        if getattr(settings, "DJANGO_ENV", "development") == "production":
+        if getattr(settings, "ENVIROMENT", "development") == "production":
             # Upload to Cloudinary
             result = cloudinary.uploader.upload(receipt_file, folder="receipts/")
             receipt_url = result.get("secure_url")
