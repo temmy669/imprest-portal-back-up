@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from .models import *
 from .serializers import *
+from purchases.models import PurchaseRequest, LimitConfig, PurchaseRequestItem
 from utils.permissions import ViewReimbursementRequest, SubmitReimbursementRequest, ApproveReimbursementRequest, DeclineReimbursementRequest, DisburseReimbursementRequest
 from helpers.response import CustomResponse
 from users.auth import JWTAuthenticationFromCookie
@@ -14,6 +15,8 @@ import os
 from django.conf import settings
 from django.utils import timezone
 
+from django.core.files.storage import FileSystemStorage
+from rest_framework.parsers import MultiPartParser, FormParser
 
 from django.db.models import Q
 from rest_framework.pagination import PageNumberPagination
@@ -22,6 +25,9 @@ from datetime import datetime
 from django.http import HttpResponse
 import openpyxl
 from openpyxl.utils import get_column_letter
+
+import cloudinary
+import cloudinary.uploader
 
 class ReimbursementRequestView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
@@ -62,7 +68,7 @@ class ReimbursementRequestView(APIView):
 
         # Area Manager filter
         if area_manager_id:
-           queryset = queryset.filter(store__assigned_users__id=area_manager_id)
+           queryset = queryset.filter(store__area_manager__id=area_manager_id)
                              
 
         # Store filter
@@ -146,8 +152,9 @@ class ReimbursementRequestView(APIView):
         if not serializer.is_valid():
             return CustomResponse(False, "Invalid data", 400, serializer.errors)
 
+        
         reimbursement = serializer.save(requester=request.user)
-
+        
         return CustomResponse(
             True,
             "Reimbursement submitted for approval",
@@ -170,37 +177,27 @@ class ReimbursementRequestView(APIView):
 
 
 class UploadReceiptView(APIView):
-    """
-    Upload a receipt for a single reimbursement item.
-    POST /reimbursement-items/<int:item_id>/receipt/
-    form-data: receipt=<file>
-    """
-    authentication_classes = [JWTAuthenticationFromCookie]
-    permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
+    authentication_classes = [JWTAuthenticationFromCookie]
+    permission_classes = [IsAuthenticated, SubmitReimbursementRequest]
 
-    def post(self, request, item_id):
-        item = get_object_or_404(
-            ReimbursementItem,
-            pk=item_id,
-            reimbursement__requester=request.user  # ensure ownership
-        )
+    def post(self, request):
+        if 'receipt' not in request.FILES:
+            return CustomResponse(False, "No receipt file provided.", 400)
+        receipt_file = request.FILES['receipt']
 
-        if "receipt" not in request.FILES:
-            return CustomResponse(False, "No file uploaded", 400)
+        if getattr(settings, "DJANGO_ENV", "development") == "production":
+            # Upload to Cloudinary
+            result = cloudinary.uploader.upload(receipt_file, folder="receipts/")
+            receipt_url = result.get("secure_url")
+        else:
+            # Local storage
+            fs = FileSystemStorage(location=os.path.join(settings.MEDIA_ROOT, 'receipts/'))
+            filename = fs.save(f"receipts/{receipt_file.name}", receipt_file)
+            receipt_url = fs.url(filename)
 
-        receipt_file = request.FILES["receipt"]
-
-        # Save using the model FileField's storage (upload_to='receipts/')
-        # This is the simplest and most robust way.
-        item.receipt.save(receipt_file.name, receipt_file, save=True)
-
-        return CustomResponse(
-            True,
-            "Receipt uploaded successfully",
-            200,
-        )
-        
+        return CustomResponse(True, "Receipt uploaded successfully.", 200, {"receipt_url": receipt_url})
+    
     
 class ApproveReimbursementView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]

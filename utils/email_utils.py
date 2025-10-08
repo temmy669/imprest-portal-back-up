@@ -121,8 +121,9 @@ def send_reimbursement_creation_notification(reimbursement):
     Sends creation notification to area manager with request details
     """
     
-    #get the store area manager for the purchase request
+    #get the store area manager for the reimbursement request
     area_manager = reimbursement.store.area_manager
+    print("Area Manager Email:", area_manager.email)
     
     context = {
         'request_id': f"PR-{reimbursement.id:04d}",

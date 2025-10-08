@@ -58,7 +58,7 @@ class ReimbursementItem(models.Model):
     item_total = models.DecimalField(max_digits=12, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     internal_control_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
-    receipt = models.FileField(upload_to='receipts/', null=True, blank=True)
+    receipt = models.CharField(max_length=255, null=True, blank=True)
     requires_receipt = models.BooleanField(default=False)
    
     

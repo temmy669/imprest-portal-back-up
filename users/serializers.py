@@ -51,69 +51,72 @@ class UserSerializer(serializers.ModelSerializer):
         
 
     def create(self, validated_data):
-        # Extract nested role data if needed
         role_data = validated_data.get('role')
         region = validated_data.pop('region', None)
-
+    
         # If role is a dictionary (nested), get the ID
         if isinstance(role_data, dict):
             role_id = role_data.get('id')
             role = Role.objects.get(id=role_id) if role_id else None
         else:
             role = role_data  # Already a Role instance
-
+    
         assigned_stores = validated_data.pop('assigned_stores', [])
         store = validated_data.pop('store', None)
         email = validated_data.get('email')
-
-        user = User.objects.filter(email=email).first()
-
-        if user:
-            # Update the existing user
-            for attr, value in validated_data.items():
-                setattr(user, attr, value)
-        else:
-            if 'username' not in validated_data or not validated_data.get('username'):
-                validated_data['username'] = email
-            user = User(**validated_data)
-
+    
+        if 'username' not in validated_data or not validated_data.get('username'):
+            validated_data['username'] = email
+    
+        user = User(**validated_data)
         user.role = role
         user.region = region
-
-        if role and role.name == 'Admin':
-            user.is_superuser = True
-        else:
-            user.is_superuser = False
-
-        user.save()  # Save before assigning M2M fields
-
+        user.is_superuser = True if role and role.name == 'Admin' else False
+        user.save()
+    
         if role and role.name == 'Area Manager':
             user.assigned_stores.set(assigned_stores)
             user.store = None
         else:
             user.assigned_stores.clear()
             user.store = store
-
+    
         user.save()
         return user
 
 
 
     def update(self, instance, validated_data):
+        prev_role = instance.role.name if instance.role else None
+    
         instance.first_name = validated_data.get('first_name', instance.first_name)
         instance.last_name = validated_data.get('last_name', instance.last_name)
         instance.email = validated_data.get('email', instance.email)
         instance.role = validated_data.get('role', instance.role)
         instance.region = validated_data.get('region', instance.region)
-
-        if 'assigned_stores' in validated_data and instance.role.name == 'Area Manager':
+    
+        # Handle Area Manager assignment
+        if 'assigned_stores' in validated_data and instance.role and instance.role.name == 'Area Manager':
             instance.assigned_stores.set(validated_data['assigned_stores'])
             instance.store = None
+            #Add area manager to stores where assigned
+            for store in instance.assigned_stores.all():
+                store.area_manager = instance
+                store.save()
         elif 'store' in validated_data:
             instance.store = validated_data['store']
             instance.assigned_stores.clear()
-
+    
         instance.is_superuser = instance.role.name == 'Admin' if instance.role else False
-
+    
+        # If role is changed from Area Manager to something else
+        if prev_role == 'Area Manager' and (not instance.role or instance.role.name != 'Area Manager'):
+            # Remove user from all stores where they are area manager
+            for store in instance.assigned_stores.all():
+                if store.area_manager_id == instance.id:
+                    store.area_manager = None
+                    store.save()
+            instance.assigned_stores.clear()
+    
         instance.save()
         return instance
