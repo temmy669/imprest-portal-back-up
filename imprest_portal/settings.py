@@ -20,7 +20,7 @@ import cloudinary
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Environment mode
-ENVIRONMENT = config('DJANGO_ENV', default='development')
+ENVIRONMENT = config('ENVIROMENT', default='development')
 
 
 
