@@ -19,6 +19,7 @@ class PurchaseRequest(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     area_manager_approved_at = models.DateTimeField(null=True, blank=True)
     area_manager_declined_at = models.DateTimeField(null=True, blank=True)
+    reimbursement = models.ForeignKey('reimbursements.Reimbursement', on_delete=models.SET_NULL, null=True, blank=True, related_name='linked_purchase_request')
     # comment = models.TextField(blank=True, null=True)
     voucher_id = models.CharField(max_length=100, default='not issued', blank=True, null=True)
     created = models.BooleanField(default=True)

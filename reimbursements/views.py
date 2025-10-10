@@ -28,6 +28,7 @@ from openpyxl.utils import get_column_letter
 
 import cloudinary
 import cloudinary.uploader
+import re
 
 class ReimbursementRequestView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
@@ -154,6 +155,21 @@ class ReimbursementRequestView(APIView):
 
         
         reimbursement = serializer.save(requester=request.user)
+
+        # Update the related purchase request with the newly created reimbursement id
+        purchase_request_refs = set()
+
+        for item in reimbursement.items.all():
+            ref = (item.purchase_request_ref or "").strip()
+            match = re.match(r'^PR-0*(\d+)', ref)  # handles cases like PR-0015 or PR-0015-12000.00
+            if match:
+                pr_id = int(match.group(1))  # convert to int (15)
+                purchase_request_refs.add(pr_id)
+
+        if purchase_request_refs:
+            purchase_requests = PurchaseRequest.objects.filter(id__in=purchase_request_refs)
+            purchase_requests.update(reimbursement=reimbursement)
+        
         
         return CustomResponse(
             True,
