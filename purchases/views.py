@@ -107,7 +107,7 @@ class PurchaseRequestView(APIView):
         pr = get_object_or_404(PurchaseRequest, pk=pk)
 
 
-        serializer = UpdatePurchaseRequestSerializer(pr, data=request.data, partial=True)
+        serializer = UpdatePurchaseRequestSerializer(pr, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(True, serializer.data, 200)
