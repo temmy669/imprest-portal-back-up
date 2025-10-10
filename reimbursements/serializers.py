@@ -45,6 +45,7 @@ class ReimbursementItemSerializer(serializers.ModelSerializer):
         if quantity is not None and quantity <= 0:
             raise serializers.ValidationError({"quantity": "Quantity must be greater than zero."})
 
+
         # Transportation rule
         if item_name == 'transportation':
             if not attrs.get('transportation_from') or not attrs.get('transportation_to'):
@@ -119,7 +120,7 @@ class ReimbursementSerializer(serializers.ModelSerializer):
         reimbursement = Reimbursement(**validated_data)
         reimbursement.total_amount = total_amount
         reimbursement.is_draft = False
-        reimbursement.save(update_fields=["is_draft", "status"], user=user)
+        reimbursement.save(user=user)
       
 
         for item in items_data:
