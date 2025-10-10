@@ -3,6 +3,7 @@ from .models import User
 from stores.models import Store, Region
 from roles.models import Role
 from stores.serializers import StoreSerializer, RegionSerializer
+from django.db.models import Q
 
 class UserSerializer(serializers.ModelSerializer):
     assigned_stores = serializers.PrimaryKeyRelatedField(
@@ -111,12 +112,15 @@ class UserSerializer(serializers.ModelSerializer):
     
         # If role is changed from Area Manager to something else
         if prev_role == 'Area Manager' and (not instance.role or instance.role.name != 'Area Manager'):
-            # Remove user from all stores where they are area manager
-            for store in instance.assigned_stores.all():
-                if store.area_manager_id == instance.id:
-                    store.area_manager = None
-                    store.save()
-            instance.assigned_stores.clear()
+            # Find all stores where they are area manager
+           stores_managed = Store.objects.filter(area_manager=instance)
     
-        instance.save()
+        # Remove user as area manager from all those stores
+        for store in stores_managed:
+            store.area_manager = None
+            store.save()
+        
+            instance.save()
+        
+        instance.assigned_stores.clear()
         return instance

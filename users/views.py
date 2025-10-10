@@ -267,7 +267,7 @@ class UserView(APIView):
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(True, "User Created successfully", data=serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return CustomResponse(False, serializer.errors, 400)
     
     def put(self, request):
         """
@@ -275,18 +275,18 @@ class UserView(APIView):
         """
         user_id = request.data.get('id')
         if not user_id:
-            return Response({"error": "User ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+            return CustomResponse(False, {"error": "User ID is required"}, 400)
 
         try:
             user = User.objects.get(id=user_id)
         except User.DoesNotExist:
-            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+            return CustomResponse(False, {"error": "User not found"}, 404)
 
         serializer = UserSerializer(user, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-            return Response({"message": "User updated successfully"}, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return CustomResponse(True, {"message": "User updated successfully"}, 200)
+        return CustomResponse(False, serializer.errors, 400)
     
 class SearchUserView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
