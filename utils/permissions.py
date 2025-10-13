@@ -111,6 +111,10 @@ class ViewPurchaseRequest(BaseRolePermission):
 class ChangePurchaseRequest(BaseRolePermission):
     codename = 'change_purchase_request'
     object_permission = True
+    
+class ChangeReimbursementRequest(BaseRolePermission):
+    codename = 'change_reimbursement_request'
+    object_permission = True
 
 class ApprovePurchaseRequest(BaseRolePermission):
     codename = 'approve_purchase_request'   # renamed for clarity

@@ -16,6 +16,14 @@ class CommentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Comment
         fields = ['id', 'user', 'text', 'created_at']
+        read_only_fields = ['user', 'created_at', 'role']
+        
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        rep['user'] = f"{instance.user.first_name} {instance.user.last_name}"
+        rep['created_at'] = instance.created_at.strftime('%d-%m-%Y %H:%M:%S')
+        rep['role'] = instance.user.role.name if instance.user.role else None
+        return rep
 
 class PurchaseRequestSerializer(serializers.ModelSerializer):
     items = PurchaseRequestItemSerializer(many=True)

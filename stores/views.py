@@ -10,6 +10,7 @@ from users.auth import JWTAuthenticationFromCookie
 from utils.permissions import ManageUsers
 from rest_framework.permissions import IsAuthenticated
 from decimal import Decimal
+from utils.pagination import DynamicPageSizePagination
 
 User = get_user_model()
 
@@ -27,7 +28,16 @@ class StoreListView(APIView):
         """
         Handles GET requests for store listing.
         """
+        
         stores = Store.objects.all()
+        
+        #filter stores by provided area managers
+        area_manager_ids = request.query_params.getlist('area_manager')
+        
+        if area_manager_ids:
+            stores = stores.filter(area_manager__id__in=area_manager_ids)
+
+        
         serializer = StoreSerializer(stores, many=True)
         return CustomResponse(True, "Stores returned Successfully", data=serializer.data)
     
@@ -154,7 +164,10 @@ class StoreBudgetView(APIView):
     
     def get(self, request):
         stores = Store.objects.all()
-        serializer = StoreBudgetSerializer(stores, many=True)
+        
+        pagination = DynamicPageSizePagination()
+        paginated_stores = pagination.paginate_queryset(stores, request)
+        serializer = StoreBudgetSerializer(paginated_stores, many=True)
         return CustomResponse(True, "Store Budgets Retrieved Successfully", 200, serializer.data)
     
     def post(self, request):

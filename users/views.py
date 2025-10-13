@@ -31,7 +31,7 @@ from utils.permissions import *
 from rest_framework.permissions import IsAuthenticated
 from .auth import JWTAuthenticationFromCookie
 from django.http import HttpResponseRedirect
-from rest_framework.pagination import PageNumberPagination
+from utils.pagination import DynamicPageSizePagination
 from collections import Counter
 
  
@@ -233,13 +233,13 @@ class UserView(APIView):
     def get(self, request):
         users = User.objects.all()
 
-        paginator = PageNumberPagination()
+        paginator = DynamicPageSizePagination()
         paginated_users = paginator.paginate_queryset(users, request)
 
         # Count active/inactive for paginated results only
         if paginated_users is not None:
-            active_count = sum(1 for u in paginated_users if u.is_active)
-            inactive_count = sum(1 for u in paginated_users if not u.is_active)
+            active_count = sum(1 for u in users if u.is_active)
+            inactive_count = sum(1 for u in users if not u.is_active)
         else:
             active_count = 0
             inactive_count = 0
@@ -287,6 +287,21 @@ class UserView(APIView):
             serializer.save()
             return CustomResponse(True, {"message": "User updated successfully"}, 200)
         return CustomResponse(False, serializer.errors, 400)
+    
+    def delete(self, request):
+        """
+        Delete an existing user.
+        """
+        user_id = request.data.get('id')
+        if not user_id:
+            return CustomResponse(False, {"error": "User ID is required"}, 400)
+
+        try:
+            user = User.objects.get(id=user_id)
+            user.delete()
+            return CustomResponse(True, {"message": "User deleted successfully"}, 200)
+        except User.DoesNotExist:
+            return CustomResponse(False, {"error": "User not found"}, 404)
     
 class SearchUserView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
