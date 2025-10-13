@@ -1,12 +1,17 @@
 from collections import Counter
 from rest_framework.generics import get_object_or_404
-from rest_framework.pagination import PageNumberPagination
+from utils.pagination import DynamicPageSizePagination
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from .models import *
 from .serializers import *
 from purchases.models import PurchaseRequest, LimitConfig, PurchaseRequestItem
-from utils.permissions import ViewReimbursementRequest, SubmitReimbursementRequest, ApproveReimbursementRequest, DeclineReimbursementRequest, DisburseReimbursementRequest
+from utils.permissions import (ViewReimbursementRequest,
+                               SubmitReimbursementRequest,
+                               ApproveReimbursementRequest,
+                               DeclineReimbursementRequest,
+                               ChangeReimbursementRequest,                               
+                                DisburseReimbursementRequest)
 from helpers.response import CustomResponse
 from users.auth import JWTAuthenticationFromCookie
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -19,8 +24,8 @@ from django.core.files.storage import FileSystemStorage
 from rest_framework.parsers import MultiPartParser, FormParser
 
 from django.db.models import Q
-from rest_framework.pagination import PageNumberPagination
 from collections import Counter
+from drf_spectacular.utils import extend_schema, OpenApiParameter
 from datetime import datetime
 from django.http import HttpResponse
 import openpyxl
@@ -38,6 +43,8 @@ class ReimbursementRequestView(APIView):
             return [IsAuthenticated(), ViewReimbursementRequest()]
         elif self.request.method == 'POST':
             return [IsAuthenticated(), SubmitReimbursementRequest()]
+        elif self.request.method == 'PUT':
+            return [IsAuthenticated(), ChangeReimbursementRequest()]
         return [IsAuthenticated()]
 
     def get(self, request):
@@ -57,7 +64,7 @@ class ReimbursementRequestView(APIView):
 
         
          # Filters from query params
-        area_manager_id = request.query_params.get("area_manager")
+        area_manager_ids = request.query_params.getlist("area_manager")
         store_ids = request.query_params.getlist("stores")  
         start_date = request.query_params.get("start_date")
         end_date = request.query_params.get("end_date")
@@ -65,12 +72,16 @@ class ReimbursementRequestView(APIView):
         search = request.query_params.get("search")
         search_query = request.query_params.get("q", "").strip()
         region_id = request.query_params.get("region")
+        disbursement_status = request.query_params.get("disbursement_status")
 
 
         # Area Manager filter
-        if area_manager_id:
-           queryset = queryset.filter(store__area_manager__id=area_manager_id)
-                             
+        if area_manager_ids:
+           queryset = queryset.filter(store__area_manager__id__in=area_manager_ids)
+        
+        # Disbursement status filter (for Treasurer)
+        if disbursement_status:
+            queryset = queryset.filter(disbursement_status=disbursement_status)                
 
         # Store filter
         if store_ids:
@@ -117,18 +128,18 @@ class ReimbursementRequestView(APIView):
 
 
         # Pagination
-        paginator = PageNumberPagination()
+        paginator = DynamicPageSizePagination()
         paginated_queryset = paginator.paginate_queryset(queryset, request)
 
         # Calculate status counts for just this page
         if user.role.name == 'Treasurer':
-            status_list = [obj.disbursement_status for obj in (paginated_queryset or [])]
+            status_list = [obj.disbursement_status for obj in (queryset or [])]
             
         elif user.role.name == 'Internal Control':
-            status_list = [obj.internal_control_status for obj in (paginated_queryset or [])]  
+            status_list = [obj.internal_control_status for obj in (queryset or [])]  
             
         else:
-            status_list = [obj.status for obj in (paginated_queryset or [])]
+            status_list = [obj.status for obj in (queryset or [])]
         
         status_count_dict = dict(Counter(status_list))
         

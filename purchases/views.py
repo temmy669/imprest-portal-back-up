@@ -11,7 +11,7 @@ from rest_framework.permissions import IsAuthenticated
 from helpers.response import CustomResponse
 from datetime import datetime
 from django.db.models import Count
-from rest_framework.pagination import PageNumberPagination
+from utils.pagination import DynamicPageSizePagination
 from collections import Counter
 import openpyxl
 from openpyxl.utils import get_column_letter
@@ -57,11 +57,11 @@ class PurchaseRequestView(APIView):
             
     
        # Paginate the queryset
-        paginator = PageNumberPagination()
+        paginator = DynamicPageSizePagination()
         paginated_queryset = paginator.paginate_queryset(queryset, request)
 
         # Calculate status counts for just this page
-        status_list = [obj.status for obj in (paginated_queryset or [])]
+        status_list = [obj.status for obj in (queryset or [])]
         status_count_dict = dict(Counter(status_list))
 
         # Serialize paginated data

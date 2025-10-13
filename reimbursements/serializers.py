@@ -14,12 +14,14 @@ class ReimbursementCommentSerializer(serializers.ModelSerializer):
     class Meta:
         model = ReimbursementComment
         fields = ['id', 'text', 'author', 'created_at']
-        read_only_fields = ['author', 'created_at']
+        read_only_fields = ['author', 'created_at', 'role']
     
     def to_representation(self, instance):
         rep = super().to_representation(instance)
         rep['author'] = f"{instance.author.first_name} {instance.author.last_name}"
         rep['created_at'] = instance.created_at.strftime('%d-%m-%Y %H:%M:%S')
+        rep['role'] = instance.author.role.name if instance.author.role else None
+        
         return rep
 
 class ReimbursementItemSerializer(serializers.ModelSerializer):
@@ -109,6 +111,11 @@ class ReimbursementSerializer(serializers.ModelSerializer):
         rep['total_amount'] = f"₦{instance.total_amount:,.2f}"
         rep['bank'] = instance.bank.bank_name if instance.bank else None
         rep['account'] = instance.account.account_name if instance.account else None
+        rep['area_manager_approved_by'] = f"{instance.area_manager.first_name} {instance.area_manager.last_name}" if instance.area_manager else None
+        rep['internal_control_approved_by'] = f"{instance.internal_control.first_name} {instance.internal_control.last_name}" if instance.internal_control else None
+        rep['area_manager_approval_date'] = instance.area_manager_approved_at.strftime('%d-%m-%Y') if instance.area_manager_approved_at else None
+        rep['internal_control_approval_date'] = instance.internal_control_approved_at.strftime('%d-%m-%Y') if instance.internal_control_approved_at else None
+        
         return rep
 
     def create(self, validated_data):
