@@ -114,13 +114,11 @@ class UserSerializer(serializers.ModelSerializer):
         if prev_role == 'Area Manager' and (not instance.role or instance.role.name != 'Area Manager'):
             # Find all stores where they are area manager
            stores_managed = Store.objects.filter(area_manager=instance)
-    
-        # Remove user as area manager from all those stores
-        for store in stores_managed:
-            store.area_manager = None
-            store.save()
-        
-            instance.save()
-        
-        instance.assigned_stores.clear()
+
+           # Remove user as area manager from all those stores
+           for store in stores_managed:
+               store.area_manager = None
+               store.save()
+
+        instance.save()
         return instance

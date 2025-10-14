@@ -2,7 +2,8 @@ from .permissions import *
 from helpers.response import CustomResponse
 from rest_framework.views import APIView
 from purchases.models import PurchaseRequest
-from reimbursements.models import Reimbursement
+from reimbursements.models import Reimbursement, ReimbursementItem
+from stores.models import Store
 from rest_framework.permissions import IsAuthenticated
 from django.db.models import Sum
 from django.db.models.functions import ExtractMonth
@@ -10,53 +11,66 @@ from django.utils import timezone
 from datetime import timedelta, datetime
 from users.auth import JWTAuthenticationFromCookie
 from django.utils.timezone import make_aware
-from django.db.models import Sum
 
-
-
-
-from django.db.models import Sum
 
 class DashboardView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
     permission_classes = [IsAuthenticated, ViewAnalytics]
-    
-    
+
+
     def get(self, request):
         now = timezone.now()
         start_week = now - timedelta(days=now.weekday())  # Monday
         end_week = start_week + timedelta(days=6)
         user = request.user
+        assigned_stores = user.assigned_stores.all()
 
         # --- Weekly Expenses ---
         weekly_expenses = (
-            Reimbursement.objects.filter(created_at__date__range=[start_week, end_week])
-            .aggregate(total=Sum("amount"), store__in=user.assigned_stores.all())
-        )["total"] or 0
+            Reimbursement.objects.filter(
+                created_at__date__range=[start_week.date(), end_week.date()],
+                store__in=assigned_stores
+            ).aggregate(total=Sum("total_amount"))["total"] or 0
+        )
 
         # --- Weekly Income (placeholder if you have an income model) ---
-        weekly_income = 0  
+        # Assuming income comes from approved PurchaseRequests
+        weekly_income = (
+            PurchaseRequest.objects.filter(
+                created_at__date__range=[start_week.date(), end_week.date()],
+                store__in=assigned_stores,
+                status='approved'
+            ).aggregate(total=Sum("total_amount"))["total"] or 0
+        )
 
         # --- Weekly Balance ---
         weekly_balance = weekly_income - weekly_expenses
 
-        # --- Imprest Amount (from Store model if you keep it there) ---
-        imprest_amount = 0  # replace with real query
+        # --- Imprest Amount (sum of balances from assigned stores) ---
+        imprest_amount = (
+            Store.objects.filter(id__in=assigned_stores).aggregate(
+                total=Sum("balance")
+            )["total"] or 0
+        )
 
-        # --- Top Weekly Expenses (with item names) ---
+        # --- Top Weekly Expenses (with item names from ReimbursementItem) ---
         top_expenses = (
-            Reimbursement.objects.filter(created_at__date__range=[start_week, end_week])
-            .values("item__name")  # assuming Reimbursement has FK to Item
-            .annotate(total_spent=Sum("amount"))
+            ReimbursementItem.objects.filter(
+                reimbursement__created_at__date__range=[start_week.date(), end_week.date()],
+                reimbursement__store__in=assigned_stores
+            ).values("item_name")
+            .annotate(total_spent=Sum("item_total"))
             .order_by("-total_spent")[:5]
         )
 
         # --- Line Chart Data (monthly expenses trend for the year) ---
         line_chart_data = (
-            Reimbursement.objects.filter(created_at__year=now.year)
-            .annotate(month=ExtractMonth("created_at"))
+            Reimbursement.objects.filter(
+                created_at__year=now.year,
+                store__in=assigned_stores
+            ).annotate(month=ExtractMonth("created_at"))
             .values("month")
-            .annotate(total=Sum("amount"))
+            .annotate(total=Sum("total_amount"))
             .order_by("month")
         )
 

@@ -1,15 +1,27 @@
-# Dynamic Pagination Implementation
+# Dashboard Fixes TODO
 
-## Steps:
+## 1. Fix Weekly Expenses Query
+- Correct syntax: Move store filter to `filter()` method
+- Use `total_amount` instead of `amount`
 
-1. [x] Create custom pagination class in `utils/pagination.py` that supports dynamic page_size from query params.
+## 2. Fix Top Weekly Expenses Query
+- Use `ReimbursementItem` model for item names and totals
+- Filter by user's assigned stores
+- Aggregate by `item_name` and sum `item_total`
 
-2. [] Update `reimbursements/views.py` to import and use `DynamicPageSizePagination` instead of `PageNumberPagination`.
+## 3. Implement Imprest Amount
+- Calculate sum of `balance` from user's assigned stores
 
-3. [] Update `purchases/views.py` to import and use `DynamicPageSizePagination` instead of `PageNumberPagination`.
+## 4. Fix Line Chart Data Query
+- Filter by user's assigned stores
+- Use `total_amount` for sum
 
-4. [] Update `users/views.py` to import and use `DynamicPageSizePagination` instead of `PageNumberPagination`.
+## 5. Handle Weekly Income
+- Determine source (e.g., PurchaseRequest approvals); currently hardcoded to 0
 
-5. [] Verify the changes by testing the endpoints (e.g., via API calls or browser).
+## 6. Add Store Filters Consistently
+- Ensure all queries filter by `store__in=user.assigned_stores.all()`
 
-6. [] Complete the task.
+## 7. Test and Validate
+- Run tests to ensure queries work and data is accurate
+- [x] Django check passed: System check identified no issues (0 silenced).

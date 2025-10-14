@@ -163,7 +163,7 @@ class StoreBudgetView(APIView):
     permission_classes = [IsAuthenticated, ManageUsers]
     
     def get(self, request):
-        stores = Store.objects.all()
+        stores = Store.objects.all().order_by('-created_at')
         
         pagination = DynamicPageSizePagination()
         paginated_stores = pagination.paginate_queryset(stores, request)

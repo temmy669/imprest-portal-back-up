@@ -8,6 +8,7 @@ from helpers.response import CustomResponse
 from helpers.exceptions import CustomValidationException
 from .models import ExpenseItem
 from .serializers import ItemSerializer
+from utils.pagination import DynamicPageSizePagination
 # Create your views here.
 
 class ExpenseItemView(APIView):
@@ -16,6 +17,16 @@ class ExpenseItemView(APIView):
     
     def get(self, request):
         items = ExpenseItem.objects.all()
+        
+        #Search query
+        search_query = request.query_params.get('search', None)
+        if search_query:
+            items = items.filter(name__icontains=search_query)
+        
+        #Pginate results
+        paginator = DynamicPageSizePagination()
+        
+        items = paginator.paginate_queryset(items, request)
         serializer = ItemSerializer(items, many=True)
         return CustomResponse(True, "Items Retrieved Successfully", 200, serializer.data)
     
