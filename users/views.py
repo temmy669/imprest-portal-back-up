@@ -231,7 +231,7 @@ class UserView(APIView):
     """
     
     def get(self, request):
-        users = User.objects.all()
+        users = User.objects.all().order_by('-created_at')
 
         paginator = DynamicPageSizePagination()
         paginated_users = paginator.paginate_queryset(users, request)
@@ -294,14 +294,14 @@ class UserView(APIView):
         """
         user_id = request.data.get('id')
         if not user_id:
-            return CustomResponse(False, {"error": "User ID is required"}, 400)
+            return CustomResponse(False, "User ID is required", 400)
 
         try:
             user = User.objects.get(id=user_id)
             user.delete()
-            return CustomResponse(True, {"message": "User deleted successfully"}, 200)
+            return CustomResponse(True,  "User deleted successfully", 200)
         except User.DoesNotExist:
-            return CustomResponse(False, {"error": "User not found"}, 404)
+            return CustomResponse(False, "User not found", 404)
     
 class SearchUserView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
@@ -318,13 +318,13 @@ class SearchUserView(APIView):
             Q(email__icontains=search_query)
         )
 
-        paginator = PageNumberPagination()
+        paginator = DynamicPageSizePagination()
         paginated_users = paginator.paginate_queryset(users, request)
 
         # Count active/inactive for paginated results only
         if paginated_users is not None:
-            active_count = sum(1 for u in paginated_users if u.is_active)
-            inactive_count = sum(1 for u in paginated_users if not u.is_active)
+            active_count = sum(1 for u in users if u.is_active)
+            inactive_count = sum(1 for u in users if not u.is_active)
         else:
             active_count = 0
             inactive_count = 0

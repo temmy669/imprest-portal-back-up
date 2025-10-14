@@ -40,7 +40,7 @@ class PurchaseRequestView(APIView):
         """
         user = request.user
         print(user)
-        queryset = PurchaseRequest.objects.all()
+        queryset = PurchaseRequest.objects.all().order_by('-created_at')
 
         # Restaurant Managers only see their own requests
         if user.role.name == 'Restaurant Manager':
@@ -149,7 +149,7 @@ class ListApprovedPurchaseRequestView(APIView):
 
     @extend_schema(summary="List approved purchase requests")
     def get(self, request):
-        queryset = PurchaseRequest.objects.filter(status='approved', requester=request.user)
+        queryset = PurchaseRequest.objects.filter(status='approved', requester=request.user, reimbursement__isnull=True).order_by('-created_at')
         serializer = ApprovedPurchaseRequestSerializer(queryset, many=True)
 
         return CustomResponse(True, "Approved purchase requests retrieved", 200, serializer.data)
@@ -368,11 +368,11 @@ class SearchPurchaseRequestView(APIView):
             return CustomResponse(False, "Only PR-XXXX search is supported", 400)
 
         # Paginate queryset
-        paginator = PageNumberPagination()
+        paginator = DynamicPageSizePagination()
         paginated_queryset = paginator.paginate_queryset(queryset, request)
 
         # Status counts for paginated results only
-        status_list = [obj.status for obj in (paginated_queryset or [])]
+        status_list = [obj.status for obj in (queryset or [])]
         status_count_dict = dict(Counter(status_list))
 
         # Serialize paginated data
@@ -423,11 +423,11 @@ class DateRangeFilterView(APIView):
         )
 
         # Paginate queryset
-        paginator = PageNumberPagination()
+        paginator = DynamicPageSizePagination()
         paginated_queryset = paginator.paginate_queryset(queryset, request)
 
         # Status counts for paginated results only
-        status_list = [obj.status for obj in (paginated_queryset or [])]
+        status_list = [obj.status for obj in (queryset or [])]
         status_count_dict = dict(Counter(status_list))
 
         # Serialize paginated data

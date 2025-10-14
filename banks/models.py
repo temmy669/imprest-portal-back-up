@@ -13,6 +13,7 @@ class Bank(models.Model):
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="active")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    gl_code = models.CharField(max_length=50, blank=True, null=True)
 
     def toggle_status(self):
         """Toggle bank status between active and inactive."""

@@ -49,7 +49,7 @@ class ReimbursementRequestView(APIView):
 
     def get(self, request):
         user = request.user
-        queryset = Reimbursement.objects.all()
+        queryset = Reimbursement.objects.all().order_by('-created_at')
 
         # Role-based restrictions
         if user.role.name == 'Restaurant Manager':

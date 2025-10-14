@@ -7,6 +7,7 @@ from .models import Bank, Account
 from .serializers import BankSerializer, AccountSerializer
 from helpers.response import CustomResponse
 from users.auth import JWTAuthenticationFromCookie
+from utils.pagination import DynamicPageSizePagination
 
 class BankView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
@@ -15,6 +16,15 @@ class BankView(APIView):
     
     def get(self, request):
         banks = Bank.objects.all()
+        #search banks
+        search_query = request.query_params.get('search', None)
+        if search_query:
+            banks = banks.filter(name__icontains=search_query)
+            
+        #paginate results
+        paginator = DynamicPageSizePagination()
+        banks = paginator.paginate_queryset(banks, request)
+            
         serializer = BankSerializer(banks, many=True)
         return CustomResponse(True, serializer.data, 200)
     
