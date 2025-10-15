@@ -26,15 +26,15 @@ class BankView(APIView):
         banks = paginator.paginate_queryset(banks, request)
             
         serializer = BankSerializer(banks, many=True)
-        return CustomResponse(True, serializer.data, 200)
+        return CustomResponse(True, "banks returned successfully", 200, serializer.data)
     
     def post(self, request):
         
         serializer = BankSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return CustomResponse(True, serializer.data, 201)
-        return CustomResponse(True, serializer.errors, 400)
+            return CustomResponse(True, "banks created successfully", 201, serializer.data)
+        return CustomResponse(False, serializer.errors, 400)
 
 class AccountView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
@@ -44,15 +44,15 @@ class AccountView(APIView):
     def get(self, request):
         accounts = Account.objects.all()
         serializer = AccountSerializer(accounts, many=True)
-        return CustomResponse(True, serializer.data, 200)
+        return CustomResponse(True, "Accounts returned successfully", 200, serializer.data)
     
     def post(self, request):
 
         serializer = AccountSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return CustomResponse(True, serializer.data, 201)
-        return CustomResponse(True, serializer.errors, 400)
+            return CustomResponse(True, "Accounts created successfully", 201, serializer.data)
+        return CustomResponse(False, serializer.errors, 400)
 
 class AccountListByBankView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
@@ -61,4 +61,4 @@ class AccountListByBankView(APIView):
     def get(self, request, bank_id):
         accounts = Account.objects.filter(bank_id=bank_id)
         serializer = AccountSerializer(accounts, many=True)
-        return CustomResponse(True, serializer.data, 200)
+        return CustomResponse(True, "success", 200, serializer.data)
