@@ -174,6 +174,7 @@ class ReimbursementUpdateSerializer(serializers.ModelSerializer):
             if old_status in ['declined', 'approved']:
                 instance.status = 'pending'
                 instance.internal_control_status = 'pending'
+                instance.save()
         
         if comments_data:
             for comment in comments_data:
@@ -183,5 +184,5 @@ class ReimbursementUpdateSerializer(serializers.ModelSerializer):
                     **comment
                 )
 
-        instance.save()
+        
         return instance
