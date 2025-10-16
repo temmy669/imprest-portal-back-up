@@ -50,15 +50,18 @@ class PurchaseRequestView(APIView):
         elif user.role.name == 'Area Manager':
             queryset = queryset.filter(store__in=user.assigned_stores.all())
             
+        # Paginate the queryset
+        paginator = DynamicPageSizePagination()
+        paginated_queryset = paginator.paginate_queryset(queryset, request)
+            
         status = request.query_params.get("status")
         
         if status:
             queryset = queryset.filter(status__iexact=status)
+            paginated_queryset = paginator.paginate_queryset(queryset, request)
             
     
-       # Paginate the queryset
-        paginator = DynamicPageSizePagination()
-        paginated_queryset = paginator.paginate_queryset(queryset, request)
+       
 
         # Calculate status counts for just this page
         status_list = [obj.status for obj in (queryset or [])]
@@ -73,7 +76,7 @@ class PurchaseRequestView(APIView):
             "next": paginator.get_next_link(),
             "previous": paginator.get_previous_link(),
             "results": serializer.data,
-            "status_counts": status_count_dict,       # counts only for current page
+            "status_counts": status_count_dict,       
         }
 
         return CustomResponse(True, "Filtered purchase requests retrieved", 200, response_data)
@@ -110,7 +113,7 @@ class PurchaseRequestView(APIView):
         serializer = UpdatePurchaseRequestSerializer(pr, data=request.data, partial=True, context={'request': request})
         if serializer.is_valid():
             serializer.save()
-            return CustomResponse(True, serializer.data, 200)
+            return CustomResponse(True, "request updated successfully", 200, serializer.data)
         return CustomResponse(False, serializer.errors, 400)
 
 class UpdatePurchaseRequestLimit(APIView):
@@ -357,19 +360,22 @@ class SearchPurchaseRequestView(APIView):
             return CustomResponse(False, "Search query is required", 400)
 
         queryset = PurchaseRequest.objects.none()
+        
+        
+        # Paginate queryset
+        paginator = DynamicPageSizePagination()
+        paginated_queryset = paginator.paginate_queryset(queryset, request)
 
         if search_query.upper().startswith("PR-"):
             try:
                 request_id = int(search_query.upper().replace("PR-", ""))
                 queryset = PurchaseRequest.objects.filter(id=request_id)
+                paginated_queryset = paginator.paginate_queryset(queryset, request)
             except ValueError:
                 return CustomResponse(False, "Invalid request ID format", 400)
         else:
             return CustomResponse(False, "Only PR-XXXX search is supported", 400)
 
-        # Paginate queryset
-        paginator = DynamicPageSizePagination()
-        paginated_queryset = paginator.paginate_queryset(queryset, request)
 
         # Status counts for paginated results only
         status_list = [obj.status for obj in (queryset or [])]

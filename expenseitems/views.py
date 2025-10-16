@@ -35,6 +35,7 @@ class ExpenseItemView(APIView):
         """Creates a new Expense Item"""
         serializer = ItemSerializer(data=request.data)
         if serializer.is_valid():
+            
             serializer.save()
             return CustomResponse(True, "Item Added", 201, data=serializer.data)
         return CustomValidationException(serializer.errors, 400)

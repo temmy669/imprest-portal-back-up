@@ -99,25 +99,26 @@ class UpdatePurchaseRequestSerializer(serializers.ModelSerializer):
         items_data = validated_data.pop('items', None)
         comments_data = validated_data.pop('comments', None)
         old_status = instance.status
-        
+
         for field, value in validated_data.items():
             setattr(instance, field, value)
         instance.save()
-        
+
         if items_data:
             instance.items.all().delete()
             for item in items_data:
                 PurchaseRequestItem.objects.create(request=instance, **item)
-        
-        if comments_data:
-            for comment in comments_data:
-                Comment.objects.create(request=instance, user=self.context['request'].user, **comment)
-            
-            #set status back to pending if items are edited
+
+            # Set status back to pending if items are edited
             if old_status in ['declined', 'approved']:
                 instance.status = 'pending'
                 instance.internal_control_status = 'pending'
-        
+                instance.save()
+
+        if comments_data:
+            for comment in comments_data:
+                Comment.objects.create(request=instance, user=self.context['request'].user, **comment)
+
         return instance
     
 class LimitConfigSerializer(serializers.ModelSerializer):

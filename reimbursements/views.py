@@ -61,7 +61,9 @@ class ReimbursementRequestView(APIView):
         elif user.role.name == 'Treasurer':
             queryset = queryset.filter(internal_control_status='approved')
             
-
+        # Pagination
+        paginator = DynamicPageSizePagination()
+        paginated_queryset = paginator.paginate_queryset(queryset, request)
         
          # Filters from query params
         area_manager_ids = request.query_params.getlist("area_manager")
@@ -78,34 +80,42 @@ class ReimbursementRequestView(APIView):
         # Area Manager filter
         if area_manager_ids:
            queryset = queryset.filter(store__area_manager__id__in=area_manager_ids)
+           paginated_queryset = paginator.paginate_queryset(queryset, request)
         
         # Disbursement status filter (for Treasurer)
         if disbursement_status:
-            queryset = queryset.filter(disbursement_status=disbursement_status)                
+            queryset = queryset.filter(disbursement_status=disbursement_status)
+            paginated_queryset = paginator.paginate_queryset(queryset, request)                
 
         # Store filter
         if store_ids:
             queryset = queryset.filter(store_id__in=store_ids)
+            paginated_queryset = paginator.paginate_queryset(queryset, request)
             
         # Region Filter
         if region_id:
-            queryset = queryset.filter(store__region_id=region_id)       
+            queryset = queryset.filter(store__region_id=region_id)  
+            paginated_queryset = paginator.paginate_queryset(queryset, request)     
 
         # Date range filter
         if start_date:
             try:
                 queryset = queryset.filter(created_at__date__gte=datetime.strptime(start_date, "%Y-%m-%d").date())
+                paginated_queryset = paginator.paginate_queryset(queryset, request)
+                
             except ValueError:
                 pass
         if end_date:
             try:
                 queryset = queryset.filter(created_at__date__lte=datetime.strptime(end_date, "%Y-%m-%d").date())
+                paginated_queryset = paginator.paginate_queryset(queryset, request)
             except ValueError:
                 pass
 
         # Status filter
         if status:
             queryset = queryset.filter(status=status)
+            paginated_queryset = paginator.paginate_queryset(queryset, request)
 
         # Search filter (by requester name)
         if search:
@@ -114,6 +124,8 @@ class ReimbursementRequestView(APIView):
                 Q(requester__last_name__icontains=search) |
                 Q(requester__name__icontains=search)  
             )
+            
+            paginated_queryset = paginator.paginate_queryset(queryset, request)
         
         # Special RR-XXXX search (takes priority if provided)
         if search_query:
@@ -121,15 +133,14 @@ class ReimbursementRequestView(APIView):
                 try:
                     request_id = int(search_query.upper().replace("RR-", ""))
                     queryset = queryset.filter(id=request_id)
+                    paginated_queryset = paginator.paginate_queryset(queryset, request)
                 except ValueError:
                     return CustomResponse(False, "Invalid request ID format. Expected RR-XXXX", 400)
             else:
                 return CustomResponse(False, "Only RR-XXXX search is supported in 'q'", 400)
 
 
-        # Pagination
-        paginator = DynamicPageSizePagination()
-        paginated_queryset = paginator.paginate_queryset(queryset, request)
+        
 
         # Calculate status counts for just this page
         if user.role.name == 'Treasurer':
