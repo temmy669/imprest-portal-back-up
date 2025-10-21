@@ -98,7 +98,7 @@ class UpdatePurchaseRequestSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)
         comments_data = validated_data.pop('comments', None)
-        old_status = instance.status
+        old_statuses = [item.status for item in instance.items.all()]
 
         for field, value in validated_data.items():
             setattr(instance, field, value)
@@ -110,9 +110,9 @@ class UpdatePurchaseRequestSerializer(serializers.ModelSerializer):
                 PurchaseRequestItem.objects.create(request=instance, **item)
 
             # Set status back to pending if items are edited
-            if old_status in ['declined', 'approved']:
+            if old_statuses in ['declined']:
+                item.status = 'pending'
                 instance.status = 'pending'
-                instance.internal_control_status = 'pending'
                 instance.save()
 
         if comments_data:

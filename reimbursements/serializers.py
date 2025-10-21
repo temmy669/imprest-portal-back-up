@@ -163,19 +163,34 @@ class ReimbursementUpdateSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)
         comments_data = validated_data.pop('comments', None)
-        old_status = instance.status
 
         if items_data:
-            instance.items.all().delete()
-            for item in items_data:
-                ReimbursementItem.objects.create(reimbursement=instance, **item)
-            
-            #set status back to pending if items are edited
-            if old_status in ['declined', 'approved']:
+            total_amount = Decimal('0.00')
+            for item_data in items_data:
+                item_id = item_data.get('id')
+                if item_id:
+                    # Update existing item
+                    item = ReimbursementItem.objects.get(id=item_id, reimbursement=instance)
+                    for field in ['unit_price', 'quantity', 'item_name', 'transportation_from', 'transportation_to', 'receipt']:
+                        setattr(item, field, item_data.get(field, getattr(item, field)))
+                    item.item_total = Decimal(item.unit_price) * item.quantity
+                    # If it was declined, set to pending
+                    if item.status == 'declined':
+                        item.status = 'pending'
+                    item.save()
+                    total_amount += item.item_total
+                else:
+                    # Create new item
+                    item_total = Decimal(item_data['unit_price']) * item_data['quantity']
+                    item_data['item_total'] = item_total
+                    ReimbursementItem.objects.create(reimbursement=instance, **item_data)
+                    total_amount += item_total
+            instance.total_amount = total_amount
+            # Check if any item is pending, set reimbursement to pending
+            if instance.items.filter(status='pending').exists():
                 instance.status = 'pending'
-                instance.internal_control_status = 'pending'
-                instance.save()
-        
+            instance.save()
+
         if comments_data:
             for comment in comments_data:
                 ReimbursementComment.objects.create(
@@ -184,5 +199,4 @@ class ReimbursementUpdateSerializer(serializers.ModelSerializer):
                     **comment
                 )
 
-        
         return instance

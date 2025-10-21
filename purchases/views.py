@@ -53,6 +53,9 @@ class PurchaseRequestView(APIView):
         # Paginate the queryset
         paginator = DynamicPageSizePagination()
         paginated_queryset = paginator.paginate_queryset(queryset, request)
+        
+        # Calculate status counts
+        status_list = [obj.status for obj in (queryset or [])]
             
         status = request.query_params.get("status")
         
@@ -63,8 +66,8 @@ class PurchaseRequestView(APIView):
     
        
 
-        # Calculate status counts for just this page
-        status_list = [obj.status for obj in (queryset or [])]
+        
+        # print(status_list)
         status_count_dict = dict(Counter(status_list))
 
         # Serialize paginated data
@@ -152,7 +155,7 @@ class ListApprovedPurchaseRequestView(APIView):
 
     @extend_schema(summary="List approved purchase requests")
     def get(self, request):
-        queryset = PurchaseRequest.objects.filter(status='approved', requester=request.user, reimbursement__isnull=True).order_by('-created_at')
+        queryset = PurchaseRequest.objects.filter(status='approved', requester=request.user, reimbursement__isnull=True, reimbursement__status='pending').order_by('-created_at')
         serializer = ApprovedPurchaseRequestSerializer(queryset, many=True)
 
         return CustomResponse(True, "Approved purchase requests retrieved", 200, serializer.data)
