@@ -163,10 +163,15 @@ class StoreBudgetView(APIView):
     permission_classes = [IsAuthenticated, ManageUsers]
     
     def get(self, request):
-        stores = Store.objects.all().order_by('-created_at')
         
+        queryset = Store.objects.all().order_by('-created_at')
+        
+        area_manager_id = request.query_params.get('area_manager')
+        if area_manager_id:
+            queryset = Store.objects.filter(area_manager__id=area_manager_id).order_by('-created_at')
+             
         pagination = DynamicPageSizePagination()
-        paginated_stores = pagination.paginate_queryset(stores, request)
+        paginated_stores = pagination.paginate_queryset(queryset, request)
         serializer = StoreBudgetSerializer(paginated_stores, many=True)
         return CustomResponse(True, "Store Budgets Retrieved Successfully", 200, serializer.data)
     

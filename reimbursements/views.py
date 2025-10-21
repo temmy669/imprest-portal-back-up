@@ -65,6 +65,16 @@ class ReimbursementRequestView(APIView):
         paginator = DynamicPageSizePagination()
         paginated_queryset = paginator.paginate_queryset(queryset, request)
         
+        # Calculate status counts for just this page
+        if user.role.name == 'Treasurer':
+            status_list = [obj.disbursement_status for obj in (queryset or [])]
+            
+        elif user.role.name == 'Internal Control':
+            status_list = [obj.internal_control_status for obj in (queryset or [])]  
+            
+        else:
+            status_list = [obj.status for obj in (queryset or [])]
+        
          # Filters from query params
         area_manager_ids = request.query_params.getlist("area_manager")
         store_ids = request.query_params.getlist("stores")  
@@ -141,16 +151,6 @@ class ReimbursementRequestView(APIView):
 
 
         
-
-        # Calculate status counts for just this page
-        if user.role.name == 'Treasurer':
-            status_list = [obj.disbursement_status for obj in (queryset or [])]
-            
-        elif user.role.name == 'Internal Control':
-            status_list = [obj.internal_control_status for obj in (queryset or [])]  
-            
-        else:
-            status_list = [obj.status for obj in (queryset or [])]
         
         status_count_dict = dict(Counter(status_list))
         
