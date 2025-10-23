@@ -158,7 +158,7 @@ class ReimbursementUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Reimbursement
-        fields = ['items', 'comments']
+        fields = ['id', 'status', 'total_amount', 'items', 'comments']
 
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)
@@ -166,31 +166,57 @@ class ReimbursementUpdateSerializer(serializers.ModelSerializer):
 
         if items_data:
             total_amount = Decimal('0.00')
+
             for item_data in items_data:
                 item_id = item_data.get('id')
+
                 if item_id:
-                    # Update existing item
-                    item = ReimbursementItem.objects.get(id=item_id, reimbursement=instance)
-                    for field in ['unit_price', 'quantity', 'item_name', 'transportation_from', 'transportation_to', 'receipt']:
+                    try:
+                        item = ReimbursementItem.objects.get(id=item_id, reimbursement=instance)
+                    except ReimbursementItem.DoesNotExist:
+                        continue
+
+                    # Update fields
+                    for field in [
+                        'unit_price', 'quantity', 'item_name',
+                        'transportation_from', 'transportation_to', 'receipt'
+                    ]:
                         setattr(item, field, item_data.get(field, getattr(item, field)))
+
                     item.item_total = Decimal(item.unit_price) * item.quantity
-                    # If it was declined, set to pending
+
+                    # If item was declined, change only this one back to pending
                     if item.status == 'declined':
                         item.status = 'pending'
+
                     item.save()
                     total_amount += item.item_total
+
                 else:
                     # Create new item
                     item_total = Decimal(item_data['unit_price']) * item_data['quantity']
                     item_data['item_total'] = item_total
-                    ReimbursementItem.objects.create(reimbursement=instance, **item_data)
+                    ReimbursementItem.objects.create(
+                        reimbursement=instance,
+                        status='pending',
+                        **item_data
+                    )
                     total_amount += item_total
-            instance.total_amount = total_amount
-            # Check if any item is pending, set reimbursement to pending
-            if instance.items.filter(status='pending').exists():
-                instance.status = 'pending'
-            instance.save()
 
+            # Update reimbursement totals
+            instance.total_amount = total_amount
+
+            # Determine reimbursement status based on item statuses
+            item_statuses = list(instance.items.values_list('status', flat=True))
+            if 'pending' in item_statuses:
+                instance.status = 'pending'
+            elif all(status == 'approved' for status in item_statuses):
+                instance.status = 'approved'
+            else:
+                # Mixed statuses (some declined, some approved)
+                instance.status = 'declined'
+
+        # Handle comments
         if comments_data:
             for comment in comments_data:
                 ReimbursementComment.objects.create(
@@ -199,4 +225,5 @@ class ReimbursementUpdateSerializer(serializers.ModelSerializer):
                     **comment
                 )
 
+        instance.save()
         return instance

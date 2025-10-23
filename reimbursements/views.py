@@ -51,7 +51,7 @@ class ReimbursementRequestView(APIView):
         user = request.user
         queryset = Reimbursement.objects.all().order_by('-created_at')
 
-        # Role-based restrictions
+        # Role-based access
         if user.role.name == 'Restaurant Manager':
             queryset = queryset.filter(requester=user)
         elif user.role.name == 'Area Manager':
@@ -60,24 +60,10 @@ class ReimbursementRequestView(APIView):
             queryset = queryset.filter(status='approved')
         elif user.role.name == 'Treasurer':
             queryset = queryset.filter(internal_control_status='approved')
-            
-        # Pagination
-        paginator = DynamicPageSizePagination()
-        paginated_queryset = paginator.paginate_queryset(queryset, request)
-        
-        # Calculate status counts for just this page
-        if user.role.name == 'Treasurer':
-            status_list = [obj.disbursement_status for obj in (queryset or [])]
-            
-        elif user.role.name == 'Internal Control':
-            status_list = [obj.internal_control_status for obj in (queryset or [])]  
-            
-        else:
-            status_list = [obj.status for obj in (queryset or [])]
-        
-         # Filters from query params
+
+        # Get filters
         area_manager_ids = request.query_params.getlist("area_manager")
-        store_ids = request.query_params.getlist("stores")  
+        store_ids = request.query_params.getlist("stores")
         start_date = request.query_params.get("start_date")
         end_date = request.query_params.get("end_date")
         status = request.query_params.get("status")
@@ -85,81 +71,67 @@ class ReimbursementRequestView(APIView):
         search_query = request.query_params.get("q", "").strip()
         region_id = request.query_params.get("region")
         disbursement_status = request.query_params.get("disbursement_status")
-        # internal_control_status = request.query_params.get("internal_control_status")
 
-
-        # Area Manager filter
+        # Apply filters
         if area_manager_ids:
-           queryset = queryset.filter(store__area_manager__id__in=area_manager_ids)
-           paginated_queryset = paginator.paginate_queryset(queryset, request)
-        
-        # Disbursement status filter (for Treasurer)
+            queryset = queryset.filter(store__area_manager__id__in=area_manager_ids)
+
         if disbursement_status:
             queryset = queryset.filter(disbursement_status=disbursement_status)
-            paginated_queryset = paginator.paginate_queryset(queryset, request)                
 
-        # Store filter
         if store_ids:
             queryset = queryset.filter(store_id__in=store_ids)
-            paginated_queryset = paginator.paginate_queryset(queryset, request)
-            
-        # Region Filter
-        if region_id:
-            queryset = queryset.filter(store__region_id=region_id)  
-            paginated_queryset = paginator.paginate_queryset(queryset, request)     
 
-        # Date range filter
+        if region_id:
+            queryset = queryset.filter(store__region_id=region_id)
+
         if start_date:
             try:
                 queryset = queryset.filter(created_at__date__gte=datetime.strptime(start_date, "%Y-%m-%d").date())
-                paginated_queryset = paginator.paginate_queryset(queryset, request)
-                
             except ValueError:
                 pass
+
         if end_date:
             try:
                 queryset = queryset.filter(created_at__date__lte=datetime.strptime(end_date, "%Y-%m-%d").date())
-                paginated_queryset = paginator.paginate_queryset(queryset, request)
             except ValueError:
                 pass
 
-        # Status filter
         if status:
             queryset = queryset.filter(status=status)
-            paginated_queryset = paginator.paginate_queryset(queryset, request)
-            
-        # # Internal Control status filter
-        # if internal_control_status:
-        #     queryset = queryset.filter(internal_control_status=internal_control_status)
-        #     paginated_queryset = paginator.paginate_queryset(queryset, request)
 
-        # Search filter (by requester name)
         if search:
             queryset = queryset.filter(
                 Q(requester__first_name__icontains=search) |
-                Q(requester__last_name__icontains=search) |
-                Q(requester__name__icontains=search)  
+                Q(requester__last_name__icontains=search)
             )
-            
-            paginated_queryset = paginator.paginate_queryset(queryset, request)
-        
-        # Special RR-XXXX search (takes priority if provided)
+
         if search_query:
             if search_query.upper().startswith("RR-"):
                 try:
                     request_id = int(search_query.upper().replace("RR-", ""))
                     queryset = queryset.filter(id=request_id)
-                    paginated_queryset = paginator.paginate_queryset(queryset, request)
                 except ValueError:
                     return CustomResponse(False, "Invalid request ID format. Expected RR-XXXX", 400)
             else:
                 return CustomResponse(False, "Only RR-XXXX search is supported in 'q'", 400)
 
+        # Pagination
+        paginator = DynamicPageSizePagination()
+        paginated_queryset = paginator.paginate_queryset(queryset, request)
 
-        
-        
+        # Status counts (after filtering)
+        if user.role.name == 'Treasurer':
+            status_field = 'disbursement_status'
+        elif user.role.name == 'Internal Control':
+            status_field = 'internal_control_status'
+        else:
+            status_field = 'status'
+
+        status_list = queryset.values_list(status_field, flat=True)
         status_count_dict = dict(Counter(status_list))
-        
+
+        # Serialize and respond
         serializer = ReimbursementSerializer(paginated_queryset, many=True)
 
         return CustomResponse(
@@ -172,8 +144,9 @@ class ReimbursementRequestView(APIView):
                 "previous": paginator.get_previous_link(),
                 "results": serializer.data,
                 "status_counts": status_count_dict,
-            }
+            },
         )
+
 
     def post(self, request):
         # Step 1: Create reimbursement (draft by default)
