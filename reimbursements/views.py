@@ -85,6 +85,7 @@ class ReimbursementRequestView(APIView):
         search_query = request.query_params.get("q", "").strip()
         region_id = request.query_params.get("region")
         disbursement_status = request.query_params.get("disbursement_status")
+        # internal_control_status = request.query_params.get("internal_control_status")
 
 
         # Area Manager filter
@@ -126,6 +127,11 @@ class ReimbursementRequestView(APIView):
         if status:
             queryset = queryset.filter(status=status)
             paginated_queryset = paginator.paginate_queryset(queryset, request)
+            
+        # # Internal Control status filter
+        # if internal_control_status:
+        #     queryset = queryset.filter(internal_control_status=internal_control_status)
+        #     paginated_queryset = paginator.paginate_queryset(queryset, request)
 
         # Search filter (by requester name)
         if search:

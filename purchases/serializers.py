@@ -133,7 +133,7 @@ class ApprovedPurchaseRequestSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = PurchaseRequest
-        fields = ['voucher_id', 'items']
+        fields = ['voucher_id', 'items', 'reimbursement']
         read_only_fields = ['voucher_id', 'request_name']
 
     def to_representation(self, instance):

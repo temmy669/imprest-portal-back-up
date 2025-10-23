@@ -18,6 +18,7 @@ from openpyxl.utils import get_column_letter
 from django.http import HttpResponse
 from collections import Counter
 from datetime import datetime
+from django.db.models import Q
 
 class PurchaseRequestView(APIView):
     """
@@ -155,7 +156,12 @@ class ListApprovedPurchaseRequestView(APIView):
 
     @extend_schema(summary="List approved purchase requests")
     def get(self, request):
-        queryset = PurchaseRequest.objects.filter(status='approved', requester=request.user, reimbursement__isnull=True, reimbursement__status='pending').order_by('-created_at')
+        queryset = PurchaseRequest.objects.filter(
+            status='approved', 
+            requester=request.user
+        ).filter(
+            Q(reimbursement__isnull=True) | Q(reimbursement__status='pending')
+            ).order_by('-created_at')
         serializer = ApprovedPurchaseRequestSerializer(queryset, many=True)
 
         return CustomResponse(True, "Approved purchase requests retrieved", 200, serializer.data)
