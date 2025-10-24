@@ -23,7 +23,7 @@ from django.utils import timezone
 from django.core.files.storage import FileSystemStorage
 from rest_framework.parsers import MultiPartParser, FormParser
 
-from django.db.models import Q
+from django.db.models import Q, Count
 from collections import Counter
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from datetime import datetime
@@ -34,6 +34,7 @@ from openpyxl.utils import get_column_letter
 import cloudinary
 import cloudinary.uploader
 import re
+
 
 class ReimbursementRequestView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
@@ -71,8 +72,28 @@ class ReimbursementRequestView(APIView):
         search_query = request.query_params.get("q", "").strip()
         region_id = request.query_params.get("region")
         disbursement_status = request.query_params.get("disbursement_status")
+        
+        # Determine which field represents status for the user role
+        if user.role.name == 'Treasurer':
+            status_field = 'disbursement_status'
+        elif user.role.name == 'Internal Control':
+            status_field = 'internal_control_status'
+        else:
+            status_field = 'status'
 
-        # Apply filters
+        # Keep a base queryset for status count BEFORE applying query param filters
+        base_queryset_for_status_count = queryset
+
+        # Calculate status counts across all statuses BEFORE query param filters
+        status_counts_all = (
+            base_queryset_for_status_count
+            .values(status_field)
+            .annotate(count=Count(status_field))
+            .order_by()
+        )
+        status_count_dict = {item[status_field]: item["count"] for item in status_counts_all}
+
+        # --- Now apply filters ---
         if area_manager_ids:
             queryset = queryset.filter(store__area_manager__id__in=area_manager_ids)
 
@@ -98,7 +119,7 @@ class ReimbursementRequestView(APIView):
                 pass
 
         if status:
-            queryset = queryset.filter(status=status)
+            queryset = queryset.filter(**{status_field: status})
 
         if search:
             queryset = queryset.filter(
@@ -116,22 +137,9 @@ class ReimbursementRequestView(APIView):
             else:
                 return CustomResponse(False, "Only RR-XXXX search is supported in 'q'", 400)
 
-        # Pagination
+        # --- Pagination and serialization ---
         paginator = DynamicPageSizePagination()
         paginated_queryset = paginator.paginate_queryset(queryset, request)
-
-        # Status counts (after filtering)
-        if user.role.name == 'Treasurer':
-            status_field = 'disbursement_status'
-        elif user.role.name == 'Internal Control':
-            status_field = 'internal_control_status'
-        else:
-            status_field = 'status'
-
-        status_list = queryset.values_list(status_field, flat=True)
-        status_count_dict = dict(Counter(status_list))
-
-        # Serialize and respond
         serializer = ReimbursementSerializer(paginated_queryset, many=True)
 
         return CustomResponse(
@@ -143,10 +151,10 @@ class ReimbursementRequestView(APIView):
                 "next": paginator.get_next_link(),
                 "previous": paginator.get_previous_link(),
                 "results": serializer.data,
-                "status_counts": status_count_dict,
+                "status_counts": status_count_dict, 
             },
         )
-
+        
 
     def post(self, request):
         # Step 1: Create reimbursement (draft by default)
