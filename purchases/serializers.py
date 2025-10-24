@@ -90,28 +90,44 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
 class UpdatePurchaseRequestSerializer(serializers.ModelSerializer):
     items = PurchaseRequestItemSerializer(many=True)
     comments = CommentSerializer(many=True, required=False)
-    
+
     class Meta:
         model = PurchaseRequest
         fields = ['store', 'items', 'comments']
-    
+
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)
         comments_data = validated_data.pop('comments', None)
-        old_statuses = [item.status for item in instance.items.all()]
+        request_status_changed = False
 
         for field, value in validated_data.items():
             setattr(instance, field, value)
         instance.save()
 
         if items_data:
-            instance.items.all().delete()
-            for item in items_data:
-                PurchaseRequestItem.objects.create(request=instance, **item)
+            for item_data in items_data:
+                item_id = item_data.get('id')
+                if item_id:
+                    try:
+                        item = PurchaseRequestItem.objects.get(id=item_id, request=instance)
+                    except PurchaseRequestItem.DoesNotExist:
+                        continue
 
-            # Set status back to pending if items are edited
-            if old_statuses in ['declined']:
-                item.status = 'pending'
+                    for field in ['item_name', 'quantity', 'unit_price', 'reason']:
+                        setattr(item, field, item_data.get(field, getattr(item, field)))
+
+                    # Reset declined item to pending
+                    if item.status == 'declined':
+                        item.status = 'pending'
+                        request_status_changed = True
+
+                    item.save()
+
+                else:
+                    PurchaseRequestItem.objects.create(request=instance, **item_data)
+                    request_status_changed = True
+
+            if request_status_changed:
                 instance.status = 'pending'
                 instance.save()
 
@@ -120,6 +136,7 @@ class UpdatePurchaseRequestSerializer(serializers.ModelSerializer):
                 Comment.objects.create(request=instance, user=self.context['request'].user, **comment)
 
         return instance
+
     
 class LimitConfigSerializer(serializers.ModelSerializer):
     class Meta:
