@@ -184,7 +184,7 @@ class ReimbursementUpdateSerializer(serializers.ModelSerializer):
                     # Use the nested serializer to update the item
                     item_serializer = ReimbursementItemSerializer(item, data=item_data, partial=True)
                     if item_serializer.is_valid():
-                        item_serializer.save()
+                        item_serializer.save(status='pending')
 
                 else:
                     # Ensure required fields are present for creating a new item
@@ -202,7 +202,7 @@ class ReimbursementUpdateSerializer(serializers.ModelSerializer):
                         # Update the existing item instead of creating a duplicate
                         item_serializer = ReimbursementItemSerializer(existing_item, data=item_data, partial=True)
                         if item_serializer.is_valid():
-                            item_serializer.save()
+                            item_serializer.save(status='pending')
                     else:
                         # Create a new item using the nested serializer
                         item_serializer = ReimbursementItemSerializer(data=item_data)
