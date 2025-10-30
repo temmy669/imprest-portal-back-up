@@ -98,43 +98,67 @@ class UpdatePurchaseRequestSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)
         comments_data = validated_data.pop('comments', None)
-        request_status_changed = False
+        
 
-        for field, value in validated_data.items():
-            setattr(instance, field, value)
-        instance.save()
-
+          # Handle item updates and additions
         if items_data:
-            for item_data in items_data:
-                item_id = item_data.get('id')
+            for i, item_data in enumerate(items_data):
+                # Get the id from initial_data since it may not be in validated_data
+                items = self.initial_data.get('items') or []
+                item_id = (items[i].get('id') if i < len(items) and isinstance(items[i], dict) else None)
+                
                 if item_id:
                     try:
-                        item = PurchaseRequestItem.objects.get(id=item_id, request=instance)
+                        # Make sure the item belongs to this reimbursement
+                        item = instance.items.get(id=item_id)
                     except PurchaseRequestItem.DoesNotExist:
                         continue
 
-                    for field in ['item_name', 'quantity', 'unit_price', 'reason']:
-                        setattr(item, field, item_data.get(field, getattr(item, field)))
-
-                    # Reset declined item to pending
-                    if item.status == 'declined':
-                        item.status = 'pending'
-                        request_status_changed = True
-
-                    item.save()
-
+                    # Use the nested serializer to update the item
+                    item_serializer = PurchaseRequestItemSerializer(item, data=item_data, partial=True)
+                    if item_serializer.is_valid():
+                        item_serializer.save()
+                        
                 else:
-                    PurchaseRequestItem.objects.create(request=instance, **item_data)
-                    request_status_changed = True
+                    # Ensure required fields are present for creating a new item
+                    if 'unit_price' not in item_data or 'quantity' not in item_data:
+                        continue  # Skip if required fields are missing
 
-            if request_status_changed:
-                instance.status = 'pending'
-                instance.save()
+                    # Check if an item with the same key attributes already exists to avoid duplicates
+                    existing_item = instance.items.filter(
+                        item_name=item_data.get('item_name'),
+                        unit_price=item_data.get('unit_price'),
+                        quantity=item_data.get('quantity')
+                    ).first()
 
+                    if existing_item:
+                        # Update the existing item instead of creating a duplicate
+                        item_serializer = PurchaseRequestItemSerializer(existing_item, data=item_data, partial=True)
+                        if item_serializer.is_valid():
+                            item_serializer.save()
+                    else:
+                        # Create a new item using the nested serializer
+                        item_serializer = PurchaseRequestItemSerializer(data=item_data)
+                        if item_serializer.is_valid():
+                            item_serializer.save(reimbursement=instance, status='pending')
+
+        # After all updates, recalculate total for ALL items
+        all_items = instance.items.all()
+        instance.total_amount = sum(item.total_price for item in all_items)
+
+        # Update reimbursement status based on all items
+        item_statuses = list(all_items.values_list('status', flat=True))
+        if 'pending' in item_statuses:
+            instance.status = 'pending'
+        elif all(status == 'approved' for status in item_statuses):
+            instance.status = 'approved'
+        else:
+            instance.status = 'declined'
         if comments_data:
             for comment in comments_data:
                 Comment.objects.create(request=instance, user=self.context['request'].user, **comment)
 
+        instance.save()
         return instance
 
     

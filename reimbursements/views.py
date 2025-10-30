@@ -83,7 +83,7 @@ class ReimbursementRequestView(APIView):
 
         # Keep a base queryset for status count BEFORE applying query param filters
         base_queryset_for_status_count = queryset
-
+        status_filter = False
         # Calculate status counts across all statuses BEFORE query param filters
         status_counts_all = (
             base_queryset_for_status_count
@@ -119,7 +119,10 @@ class ReimbursementRequestView(APIView):
                 pass
 
         if status:
-            queryset = queryset.filter(**{status_field: status})
+            queryset = queryset.filter(status=status)
+            
+            # status_filter = True
+            # status_field
 
         if search:
             queryset = queryset.filter(
@@ -136,8 +139,14 @@ class ReimbursementRequestView(APIView):
                     return CustomResponse(False, "Invalid request ID format. Expected RR-XXXX", 400)
             else:
                 return CustomResponse(False, "Only RR-XXXX search is supported in 'q'", 400)
-
+        
+        
+        #return empty status count if queryset is empty after filters
+        if not queryset.exists():
+            status_count_dict = {}
+            
         # --- Pagination and serialization ---
+        
         paginator = DynamicPageSizePagination()
         paginated_queryset = paginator.paginate_queryset(queryset, request)
         serializer = ReimbursementSerializer(paginated_queryset, many=True)

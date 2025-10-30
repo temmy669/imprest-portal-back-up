@@ -8,6 +8,8 @@ from purchases.models import LimitConfig
 from decimal import Decimal
 
 purchase_limit = LimitConfig.objects.first()
+if purchase_limit is None:
+    purchase_limit = LimitConfig(limit=5000)  # Default limit if not set
 
 
 class ReimbursementCommentSerializer(serializers.ModelSerializer):
@@ -49,7 +51,7 @@ class ReimbursementItemSerializer(serializers.ModelSerializer):
 
 
         # Transportation rule
-        if item_name == 'transportation':
+        if item_name == 'transportation' and not self.partial:
             if not attrs.get('transportation_from') or not attrs.get('transportation_to'):
                 raise serializers.ValidationError(
                     "Transportation items must include 'transportation_from' and 'transportation_to'."
@@ -155,6 +157,7 @@ class ReimbursementSerializer(serializers.ModelSerializer):
 class ReimbursementUpdateSerializer(serializers.ModelSerializer):
     items = ReimbursementItemSerializer(many=True, required=False)
     comments = ReimbursementCommentSerializer(many=True, required=False)
+    
 
     class Meta:
         model = Reimbursement
@@ -164,57 +167,60 @@ class ReimbursementUpdateSerializer(serializers.ModelSerializer):
         items_data = validated_data.pop('items', None)
         comments_data = validated_data.pop('comments', None)
 
+        # Handle item updates and additions
         if items_data:
-            total_amount = Decimal('0.00')
-
-            for item_data in items_data:
-                item_id = item_data.get('id')
-
+            for i, item_data in enumerate(items_data):
+                # Get the id from initial_data since it may not be in validated_data
+                items = self.initial_data.get('items') or []
+                item_id = (items[i].get('id') if i < len(items) and isinstance(items[i], dict) else None)
+                
                 if item_id:
                     try:
-                        item = ReimbursementItem.objects.get(id=item_id, reimbursement=instance)
+                        # Make sure the item belongs to this reimbursement
+                        item = instance.items.get(id=item_id)
                     except ReimbursementItem.DoesNotExist:
                         continue
 
-                    # Update fields
-                    for field in [
-                        'unit_price', 'quantity', 'item_name',
-                        'transportation_from', 'transportation_to', 'receipt'
-                    ]:
-                        setattr(item, field, item_data.get(field, getattr(item, field)))
-
-                    item.item_total = Decimal(item.unit_price) * item.quantity
-
-                    # If item was declined, change only this one back to pending
-                    if item.status == 'declined':
-                        item.status = 'pending'
-
-                    item.save()
-                    total_amount += item.item_total
+                    # Use the nested serializer to update the item
+                    item_serializer = ReimbursementItemSerializer(item, data=item_data, partial=True)
+                    if item_serializer.is_valid():
+                        item_serializer.save()
 
                 else:
-                    # Create new item
-                    item_total = Decimal(item_data['unit_price']) * item_data['quantity']
-                    item_data['item_total'] = item_total
-                    ReimbursementItem.objects.create(
-                        reimbursement=instance,
-                        status='pending',
-                        **item_data
-                    )
-                    total_amount += item_total
+                    # Ensure required fields are present for creating a new item
+                    if 'unit_price' not in item_data or 'quantity' not in item_data:
+                        continue  # Skip if required fields are missing
 
-            # Update reimbursement totals
-            instance.total_amount = total_amount
+                    # Check if an item with the same key attributes already exists to avoid duplicates
+                    existing_item = instance.items.filter(
+                        item_name=item_data.get('item_name'),
+                        unit_price=item_data.get('unit_price'),
+                        quantity=item_data.get('quantity')
+                    ).first()
 
-            # Determine reimbursement status based on item statuses
-            item_statuses = list(instance.items.values_list('status', flat=True))
-            if 'pending' in item_statuses:
-                instance.status = 'pending'
-            elif all(status == 'approved' for status in item_statuses):
-                instance.status = 'approved'
-            else:
-                # Mixed statuses (some declined, some approved)
-                instance.status = 'declined'
+                    if existing_item:
+                        # Update the existing item instead of creating a duplicate
+                        item_serializer = ReimbursementItemSerializer(existing_item, data=item_data, partial=True)
+                        if item_serializer.is_valid():
+                            item_serializer.save()
+                    else:
+                        # Create a new item using the nested serializer
+                        item_serializer = ReimbursementItemSerializer(data=item_data)
+                        if item_serializer.is_valid():
+                            item_serializer.save(reimbursement=instance, status='pending')
+
+        # After all updates, recalculate total for ALL items
+        all_items = instance.items.all()
+        instance.total_amount = sum(item.item_total for item in all_items)
+
+        # Update reimbursement status based on all items
+        item_statuses = list(all_items.values_list('status', flat=True))
+        if 'pending' in item_statuses:
+            instance.status = 'pending'
+        elif all(status == 'approved' for status in item_statuses):
+            instance.status = 'approved'
+        else:
+            instance.status = 'declined'
 
         # Handle comments
         if comments_data:

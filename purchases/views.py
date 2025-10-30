@@ -65,11 +65,14 @@ class PurchaseRequestView(APIView):
             paginated_queryset = paginator.paginate_queryset(queryset, request)
             
     
-       
-
         
         # print(status_list)
         status_count_dict = dict(Counter(status_list))
+        
+        #return empty status count if queryset is empty after filters
+        if not queryset.exists():
+            status_count_dict = {}
+            
 
         # Serialize paginated data
         serializer = PurchaseRequestSerializer(paginated_queryset, many=True)
