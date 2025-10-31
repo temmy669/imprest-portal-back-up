@@ -117,7 +117,7 @@ class UpdatePurchaseRequestSerializer(serializers.ModelSerializer):
                     # Use the nested serializer to update the item
                     item_serializer = PurchaseRequestItemSerializer(item, data=item_data, partial=True)
                     if item_serializer.is_valid():
-                        item_serializer.save()
+                        item_serializer.save(status='pending')
                         
                 else:
                     # Ensure required fields are present for creating a new item
@@ -135,12 +135,13 @@ class UpdatePurchaseRequestSerializer(serializers.ModelSerializer):
                         # Update the existing item instead of creating a duplicate
                         item_serializer = PurchaseRequestItemSerializer(existing_item, data=item_data, partial=True)
                         if item_serializer.is_valid():
-                            item_serializer.save()
+                            item_serializer.save(status='pending')
                     else:
                         # Create a new item using the nested serializer
                         item_serializer = PurchaseRequestItemSerializer(data=item_data)
                         if item_serializer.is_valid():
                             item_serializer.save(reimbursement=instance, status='pending')
+                            
 
         # After all updates, recalculate total for ALL items
         all_items = instance.items.all()
