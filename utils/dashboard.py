@@ -12,6 +12,7 @@ from datetime import timedelta, datetime
 from users.auth import JWTAuthenticationFromCookie
 from decimal import Decimal
 from purchases.models import LimitConfig
+import calendar
 
 class DashboardView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
@@ -100,7 +101,14 @@ class DashboardView(APIView):
 
 
         monthly_totals = {int(item["month"]): float(item["total"]) for item in line_qs}
-        line_chart_data = [{"month": m, "total": monthly_totals.get(m, 0)} for m in range(1, 13)]
+    
+        line_chart_data = [
+                    {
+                        "month": calendar.month_name[m],  # e.g. "January"
+                        "total": monthly_totals.get(m, 0)
+                    }
+                    for m in range(1, 13)
+                ]
 
         # --- Final Response ---
         return CustomResponse(
