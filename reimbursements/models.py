@@ -3,6 +3,7 @@ from users.models import User
 from stores.models import Store
 from purchases.models import PurchaseRequest
 from banks.models import Bank, Account
+from decimal import Decimal
 
 # Create your models here.
 STATUS_CHOICES = [
@@ -16,7 +17,7 @@ STATUS_CHOICES = [
 class Reimbursement(models.Model):
     requester = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reimbursements')
     store = models.ForeignKey(Store, on_delete=models.CASCADE)
-    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'))
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     is_draft = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -60,6 +61,11 @@ class ReimbursementItem(models.Model):
     internal_control_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     receipt = models.CharField(max_length=255, null=True, blank=True)
     requires_receipt = models.BooleanField(default=False)
+    receipt_validated = models.BooleanField(default=False)
+    extracted_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    extracted_date = models.DateField(null=True, blank=True)
+    extracted_vendor = models.CharField(max_length=255, null=True, blank=True)
+    validation_errors = models.TextField(null=True, blank=True)
    
     
 class ReimbursementComment(models.Model):

@@ -1,11 +1,12 @@
 from rest_framework import serializers
 from .models import (
-    Reimbursement, 
-    ReimbursementItem, 
+    Reimbursement,
+    ReimbursementItem,
     ReimbursementComment
 )
 from purchases.models import LimitConfig
 from decimal import Decimal
+from utils.receipt_validation import validate_receipt
 
 purchase_limit = LimitConfig.objects.first()
 if purchase_limit is None:
@@ -32,9 +33,11 @@ class ReimbursementItemSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'item_name', 'gl_code', 'transportation_from', 'transportation_to',
             'unit_price', 'quantity', 'item_total', 'purchase_request_ref',
-            'status', 'internal_control_status', 'receipt', 'requires_receipt'
+            'status', 'internal_control_status', 'receipt', 'requires_receipt',
+            'receipt_validated', 'extracted_amount', 'extracted_date', 'extracted_vendor', 'validation_errors'
         ]
-        read_only_fields = ['item_total', 'requires_receipt', 'status', 'internal_control_status']
+        read_only_fields = ['item_total', 'requires_receipt', 'status', 'internal_control_status',
+                            'receipt_validated', 'extracted_amount', 'extracted_date', 'extracted_vendor', 'validation_errors']
 
     def validate(self, attrs):
         unit_price = attrs.get('unit_price')

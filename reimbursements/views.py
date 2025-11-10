@@ -10,7 +10,7 @@ from utils.permissions import (ViewReimbursementRequest,
                                SubmitReimbursementRequest,
                                ApproveReimbursementRequest,
                                DeclineReimbursementRequest,
-                               ChangeReimbursementRequest,                               
+                               ChangeReimbursementRequest,
                                 DisburseReimbursementRequest)
 from helpers.response import CustomResponse
 from users.auth import JWTAuthenticationFromCookie
@@ -34,6 +34,7 @@ from openpyxl.utils import get_column_letter
 import cloudinary
 import cloudinary.uploader
 import re
+from utils.receipt_validation import validate_receipt
 
 
 class ReimbursementRequestView(APIView):
@@ -220,6 +221,22 @@ class UploadReceiptView(APIView):
             return CustomResponse(False, "No receipt file provided.", 400)
         receipt_file = request.FILES['receipt']
 
+        item_id = request.data.get('item_id')
+        if not item_id:
+            return CustomResponse(False, "Item ID is required for validation.", 400)
+
+        try:
+            item = ReimbursementItem.objects.get(id=item_id)
+        except ReimbursementItem.DoesNotExist:
+            return CustomResponse(False, "Invalid item ID.", 400)
+
+        # Validate the receipt
+        validation_result = validate_receipt(receipt_file.read(), item.item_total, item.reimbursement.created_at.date() if item.reimbursement.created_at else None)
+
+        if not validation_result['valid']:
+            return CustomResponse(False, "Receipt validation failed.", 400, {"validation_errors": validation_result['errors']})
+
+        # If valid, upload to Cloudinary or local
         if getattr(settings, "ENVIRONMENT", "development") == "production":
             # Upload to Cloudinary
             result = cloudinary.uploader.upload(receipt_file, folder="receipts/")
@@ -230,7 +247,16 @@ class UploadReceiptView(APIView):
             filename = fs.save(f"receipts/{receipt_file.name}", receipt_file)
             receipt_url = fs.url(filename)
 
-        return CustomResponse(True, "Receipt uploaded successfully.", 200, {"receipt_url": receipt_url})
+        # Save validation data to item
+        item.receipt = receipt_url
+        item.receipt_validated = True
+        item.extracted_amount = validation_result.get('extracted_amount')
+        item.extracted_date = validation_result.get('extracted_date')
+        item.extracted_vendor = validation_result.get('extracted_vendor')
+        item.validation_errors = None  # Clear any previous errors
+        item.save()
+
+        return CustomResponse(True, "Receipt uploaded and validated successfully.", 200, {"receipt_url": receipt_url})
     
     
 class ApproveReimbursementView(APIView):
