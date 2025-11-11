@@ -226,12 +226,12 @@ class UploadReceiptView(APIView):
             return CustomResponse(False, "Item ID is required for validation.", 400)
 
         try:
-            item = ReimbursementItem.objects.get(id=item_id)
-        except ReimbursementItem.DoesNotExist:
+            item = PurchaseRequestItem.objects.get(id=item_id)
+        except PurchaseRequestItem.DoesNotExist:
             return CustomResponse(False, "Invalid item ID.", 400)
 
         # Validate the receipt
-        validation_result = validate_receipt(receipt_file.read(), item.item_total, item.reimbursement.created_at.date() if item.reimbursement.created_at else None)
+        validation_result = validate_receipt(receipt_file.read(), item.total_price, item.request.created_at.date() if item.request.created_at else None)
 
         if not validation_result['validated']:
             return CustomResponse(False, "Receipt validation failed.", 400, {"validation_errors": validation_result['errors']})
@@ -246,9 +246,9 @@ class UploadReceiptView(APIView):
             fs = FileSystemStorage(location=os.path.join(settings.MEDIA_ROOT, 'receipts/'))
             filename = fs.save(f"receipts/{receipt_file.name}", receipt_file)
             receipt_url = fs.url(filename)
+            
 
         # Save validation data to item
-        item.receipt = receipt_url
         item.receipt_validated = True
         item.extracted_amount = validation_result.get('extracted_amount')
         item.extracted_date = validation_result.get('extracted_date')
