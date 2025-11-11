@@ -233,7 +233,7 @@ class UploadReceiptView(APIView):
         # Validate the receipt
         validation_result = validate_receipt(receipt_file.read(), item.item_total, item.reimbursement.created_at.date() if item.reimbursement.created_at else None)
 
-        if not validation_result['valid']:
+        if not validation_result['validated']:
             return CustomResponse(False, "Receipt validation failed.", 400, {"validation_errors": validation_result['errors']})
 
         # If valid, upload to Cloudinary or local
