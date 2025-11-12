@@ -7,8 +7,9 @@ purchase_limit = LimitConfig.objects.first()
 class PurchaseRequestItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = PurchaseRequestItem
-        fields = ['id', 'gl_code', 'expense_item', 'unit_price', 'quantity', 'total_price', 'status']
-        read_only_fields = ['total_price']
+        fields = ['id', 'gl_code', 'expense_item', 'unit_price', 'quantity', 'total_price', 'status',
+                  'receipt_validated', 'extracted_amount', 'extracted_date', 'extracted_vendor', 'validation_errors']
+        read_only_fields = ['total_price', 'receipt_validated', 'extracted_amount', 'extracted_date', 'extracted_vendor', 'validation_errors']
 
 class CommentSerializer(serializers.ModelSerializer):
     user = serializers.StringRelatedField()
@@ -34,11 +35,12 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
         model = PurchaseRequest
         fields = [
             'id', 'requester', 'store', 'status', 'status_display', 
-            'total_amount', 'comments', 'items', 'receipt_validated', 'extracted_amount', 'extracted_date', 'extracted_vendor', 'validation_errors']
+            'total_amount', 'comments', 'items', 
+            ]
         
         read_only_fields = ['total_amount', 'requester_email', 'role', 'requester_phone', 'store_code',
                             'request_date', 'request_id', 'comments', 'voucher_id','approved_by', 
-                            'approval_date',  'receipt_validated', 'extracted_amount', 'extracted_date', 'extracted_vendor', 'validation_errors']
+                            'approval_date']
     
     def to_representation(self, instance):
         rep = super().to_representation(instance)
