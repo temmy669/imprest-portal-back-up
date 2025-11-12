@@ -49,6 +49,12 @@ class PurchaseRequestItem(models.Model):
     quantity = models.PositiveIntegerField(default=1)
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    receipt_validated = models.BooleanField(default=False)
+    extracted_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    extracted_date = models.DateField(null=True, blank=True)
+    extracted_vendor = models.CharField(max_length=255, null=True, blank=True)
+    validation_errors = models.TextField(null=True, blank=True)
+   
 
     def save(self, *args, **kwargs):
         self.total_price = self.unit_price * self.quantity

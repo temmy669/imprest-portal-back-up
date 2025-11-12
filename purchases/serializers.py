@@ -34,9 +34,11 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
         model = PurchaseRequest
         fields = [
             'id', 'requester', 'store', 'status', 'status_display', 
-            'total_amount', 'comments', 'items',
-        ]
-        read_only_fields = ['total_amount', 'requester_email', 'role', 'requester_phone', 'store_code', 'request_date', 'request_id', 'comments', 'voucher_id','approved_by', 'approval_date']
+            'total_amount', 'comments', 'items', 'receipt_validated', 'extracted_amount', 'extracted_date', 'extracted_vendor', 'validation_errors']
+        
+        read_only_fields = ['total_amount', 'requester_email', 'role', 'requester_phone', 'store_code',
+                            'request_date', 'request_id', 'comments', 'voucher_id','approved_by', 
+                            'approval_date',  'receipt_validated', 'extracted_amount', 'extracted_date', 'extracted_vendor', 'validation_errors']
     
     def to_representation(self, instance):
         rep = super().to_representation(instance)

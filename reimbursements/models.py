@@ -61,12 +61,7 @@ class ReimbursementItem(models.Model):
     internal_control_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     receipt = models.CharField(max_length=255, null=True, blank=True)
     requires_receipt = models.BooleanField(default=False)
-    receipt_validated = models.BooleanField(default=False)
-    extracted_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    extracted_date = models.DateField(null=True, blank=True)
-    extracted_vendor = models.CharField(max_length=255, null=True, blank=True)
-    validation_errors = models.TextField(null=True, blank=True)
-   
+    
     
 class ReimbursementComment(models.Model):
     reimbursement = models.ForeignKey(Reimbursement, on_delete=models.CASCADE, related_name='comments')

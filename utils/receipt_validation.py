@@ -1,17 +1,16 @@
-import pytesseract
-import cv2
+import base64
+import json
 import re
 from decimal import Decimal
 from datetime import datetime
 from PIL import Image
 import io
-import requests
-import numpy as np
+import google.generativeai as genai
 from django.conf import settings
 
 def validate_receipt(image_data, expected_amount=None, expected_date=None):
     """
-    Validate receipt by extracting text using OCR and comparing with expected values.
+    Validate receipt by extracting text using Google Gemini and comparing with expected values.
 
     Args:
         image_data (bytes): Raw image data
@@ -33,124 +32,109 @@ def validate_receipt(image_data, expected_amount=None, expected_date=None):
     extracted_vendor = None
 
     try:
-        # Convert to PIL Image
+        # Configure Gemini API
+        genai.configure(api_key=settings.GEMINI_API_KEY)
+        model = genai.GenerativeModel('gemini-2.5-flash')
+
+        # Convert image to base64
         image = Image.open(io.BytesIO(image_data))
+        buffer = io.BytesIO()
+        image.save(buffer, format='PNG')
+        image_b64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
 
-        # Convert to OpenCV format safely
-        opencv_image = np.array(image)
+        # Create prompt for Gemini
+        prompt = """
+        Analyze this receipt image and extract the following information in JSON format:
+        - amount: The total amount paid (as a number, e.g., 1500.00)
+        - date: The transaction date in YYYY-MM-DD format
+        - vendor: The name of the vendor/store/business
+        - receipt number: The receipt number if available
 
-        # Convert to grayscale only if necessary
-        if len(opencv_image.shape) == 3:
-            if opencv_image.shape[2] == 3:  # RGB
-                opencv_image = cv2.cvtColor(opencv_image, cv2.COLOR_RGB2GRAY)
-            elif opencv_image.shape[2] == 4:  # RGBA
-                opencv_image = cv2.cvtColor(opencv_image, cv2.COLOR_RGBA2GRAY)
-        # If shape is only 2D (already grayscale), do nothing
+        Return only valid JSON with these keys. If any information is not found, use null for that field.
+        Example: {"amount": 1500.00, "date": "2023-12-31", "vendor": "Store Name", "receipt_number": "123456"}
+        """
 
+        # Generate content with Gemini
+        response = model.generate_content([
+            prompt,
+            {
+                "mime_type": "image/png",
+                "data": image_b64
+            }
+        ])
 
-        # Preprocessing for better OCR
-        opencv_image = cv2.resize(opencv_image, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
-        opencv_image = cv2.threshold(opencv_image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+        # Parse the response
+        response_text = response.text.strip()
 
-        # Extract text
-        text = pytesseract.image_to_string(opencv_image)
+        # Clean up response (remove markdown code blocks if present)
+        if response_text.startswith('```json'):
+            response_text = response_text[7:]
+        if response_text.endswith('```'):
+            response_text = response_text[:-3]
+        response_text = response_text.strip()
 
-        # Extract amount (look for currency patterns)
-        amount_patterns = [
-            r'₦\s*[\d,]+\.?\d*',  # ₦1,234.56
-            r'\$\s*[\d,]+\.?\d*',  # $1,234.56
-            r'Total[:\s]*[\d,]+\.?\d*',  # Total: 1234.56
-            r'Amount[:\s]*[\d,]+\.?\d*',  # Amount: 1234.56
-            r'[\d,]+\.?\d*\s*Naira',  # 1234.56 Naira
-        ]
-
-        for pattern in amount_patterns:
-            matches = re.findall(pattern, text, re.IGNORECASE)
-            if matches:
-                # Clean the amount
-                amount_str = re.sub(r'[₦$NairaTotalAmount:\s]', '', matches[0])
-                amount_str = amount_str.replace(',', '')
+        try:
+            data = json.loads(response_text)
+        except json.JSONDecodeError:
+            errors.append("Failed to parse Gemini response as JSON")
+            validated = False
+        else:
+            # Extract amount
+            if data.get('amount') is not None:
                 try:
-                    extracted_amount = Decimal(amount_str)
-                    break
-                except:
-                    continue
+                    extracted_amount = Decimal(str(data['amount']))
+                except (ValueError, TypeError):
+                    errors.append("Invalid amount format from Gemini")
 
-        # Extract date
-        date_patterns = [
-            r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}',  # 12/31/2023 or 12-31-2023
-            r'\d{2,4}[/-]\d{1,2}[/-]\d{1,2}',  # 2023/12/31 or 2023-12-31
-            r'\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{2,4}',  # 31 Dec 2023
-        ]
-
-        for pattern in date_patterns:
-            matches = re.findall(pattern, text, re.IGNORECASE)
-            if matches:
+            # Extract receipt number (not used in validation but extracted)
+            if data.get('receipt_number'):
                 try:
-                    # Try to parse the date
-                    for date_str in matches:
-                        try:
-                            if '/' in date_str or '-' in date_str:
-                                if len(date_str.split('/')[0]) > 2 or len(date_str.split('-')[0]) > 2:
-                                    # Assume YYYY/MM/DD or YYYY-MM-DD
-                                    extracted_date = datetime.strptime(date_str, '%Y/%m/%d').date()
-                                else:
-                                    # Assume DD/MM/YYYY or DD-MM-YYYY
-                                    extracted_date = datetime.strptime(date_str, '%d/%m/%Y').date()
-                            else:
-                                # Month name format
-                                extracted_date = datetime.strptime(date_str, '%d %b %Y').date()
-                            break
-                        except:
-                            continue
-                except:
-                    pass
-                if extracted_date:
-                    break
+                    receipt_number = str(data['receipt_number']).strip()
+                except (ValueError, TypeError):
+                    receipt_number = None
+                
+            
+            # Extract date
+            if data.get('date'):
+                try:
+                    extracted_date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+                except (ValueError, TypeError):
+                    errors.append("Invalid date format from Gemini")
 
-        # Extract vendor (look for common vendor patterns)
-        vendor_patterns = [
-            r'(?:From|Vendor|Merchant|Store):\s*([^\n\r]+)',
-            r'^([^\n\r]+)\s*Receipt',
-            r'^([^\n\r]+)\s*Invoice',
-        ]
+            # Extract vendor
+            if data.get('vendor'):
+                extracted_vendor = str(data['vendor']).strip()
 
-        for pattern in vendor_patterns:
-            matches = re.findall(pattern, text, re.MULTILINE | re.IGNORECASE)
-            if matches:
-                extracted_vendor = matches[0].strip()
-                break
+            # Validation logic
+            validated = True
 
-        # Validation logic
-        validated = True
+            if expected_amount and extracted_amount:
+                # Allow 10% tolerance for amount matching
+                tolerance = expected_amount * Decimal('0.1')
+                if abs(extracted_amount - expected_amount) > tolerance:
+                    errors.append(f"Extracted amount {extracted_amount} does not match expected {expected_amount}")
+                    validated = False
 
-        if expected_amount and extracted_amount:
-            # Allow 10% tolerance for amount matching
-            tolerance = expected_amount * Decimal('0.1')
-            if abs(extracted_amount - expected_amount) > tolerance:
-                errors.append(f"Extracted amount {extracted_amount} does not match expected {expected_amount}")
+            if expected_date and extracted_date:
+                # Check if dates match within 7 days
+                if abs((extracted_date - expected_date).days) > 7:
+                    errors.append(f"Extracted date {extracted_date} does not match expected {expected_date}")
+                    validated = False
+
+            if not extracted_amount:
+                errors.append("Could not extract amount from receipt")
                 validated = False
 
-        if expected_date and extracted_date:
-            # Check if dates match within 7 days
-            if abs((extracted_date - expected_date).days) > 7:
-                errors.append(f"Extracted date {extracted_date} does not match expected {expected_date}")
+            if not extracted_date:
+                errors.append("Could not extract date from receipt")
                 validated = False
 
-        if not extracted_amount:
-            errors.append("Could not extract amount from receipt")
-            validated = False
-
-        if not extracted_date:
-            errors.append("Could not extract date from receipt")
-            validated = False
-
-        if not extracted_vendor:
-            errors.append("Could not extract vendor from receipt")
-            validated = False
+            if not extracted_vendor:
+                errors.append("Could not extract vendor from receipt")
+                validated = False
 
     except Exception as e:
-        errors.append(f"OCR processing failed: {str(e)}")
+        errors.append(f"Gemini processing failed: {str(e)}")
         validated = False
 
     return {
@@ -158,5 +142,6 @@ def validate_receipt(image_data, expected_amount=None, expected_date=None):
         'extracted_amount': extracted_amount,
         'extracted_date': extracted_date,
         'extracted_vendor': extracted_vendor,
+        'receipt_number': receipt_number if 'receipt_number' in locals() else None,
         'errors': errors
     }
