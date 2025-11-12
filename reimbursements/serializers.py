@@ -34,10 +34,8 @@ class ReimbursementItemSerializer(serializers.ModelSerializer):
             'id', 'item_name', 'gl_code', 'transportation_from', 'transportation_to',
             'unit_price', 'quantity', 'item_total', 'purchase_request_ref',
             'status', 'internal_control_status', 'receipt', 'requires_receipt',
-            'receipt_validated', 'extracted_amount', 'extracted_date', 'extracted_vendor', 'validation_errors'
         ]
-        read_only_fields = ['item_total', 'requires_receipt', 'status', 'internal_control_status',
-                            'receipt_validated', 'extracted_amount', 'extracted_date', 'extracted_vendor', 'validation_errors']
+        read_only_fields = ['item_total', 'requires_receipt',]
 
     def validate(self, attrs):
         unit_price = attrs.get('unit_price')
@@ -101,7 +99,7 @@ class ReimbursementSerializer(serializers.ModelSerializer):
             'id', 'status', 'items', 'comments', 'requester',
             'internal_control_status', 'store', 'disbursement_status', 'bank', 'account'
         ]
-        read_only_fields = ['status', 'requester', 'disbursement_status', 'internal_control_status']
+        read_only_fields = ['requester', 'disbursement_status']
 
     def to_representation(self, instance):
         rep = super().to_representation(instance)
@@ -122,41 +120,54 @@ class ReimbursementSerializer(serializers.ModelSerializer):
         rep['internal_control_approval_date'] = instance.internal_control_approved_at.strftime('%d-%m-%Y') if instance.internal_control_approved_at else None
         
         return rep
-
+    
     def create(self, validated_data):
         items_data = validated_data.pop('items')
         comments_data = validated_data.pop('comments', [])
         user = self.context['request'].user
 
-        total_amount = sum(Decimal(i['unit_price']) * i['quantity'] for i in items_data)
-        reimbursement = Reimbursement(**validated_data)
-        reimbursement.total_amount = total_amount
-        reimbursement.is_draft = False
-        reimbursement.save(user=user)
-      
+        # Validate items BEFORE saving anything
+        invalid_items = [
+            item for item in items_data
+            if item.get('requires_receipt') and not item.get('receipt')
+        ]
+        if invalid_items:
+            raise serializers.ValidationError({
+                "detail": "Some items require receipts before submission.",
+                "items_missing_receipts": [
+                    {
+                        "item_name": i.get('item_name'),
+                        "unit_price": str(i.get('unit_price')),
+                        "quantity": i.get('quantity'),
+                    } for i in invalid_items
+                ]
+            })
 
+        # Compute total amount
+        total_amount = sum(Decimal(i['unit_price']) * i['quantity'] for i in items_data)
+
+        # Create reimbursement
+        reimbursement = Reimbursement.objects.create(
+            requester=user,
+            total_amount=total_amount,
+            is_draft=False,
+            **validated_data
+        )
+
+        # Create items
         for item in items_data:
             item['item_total'] = Decimal(item['unit_price']) * item['quantity']
             ReimbursementItem.objects.create(reimbursement=reimbursement, **item)
 
+        # Create comments
         for comment in comments_data:
-            ReimbursementComment.objects.create(reimbursement=reimbursement, author=user, **comment)
+            ReimbursementComment.objects.create(
+                reimbursement=reimbursement, author=user, **comment
+            )
 
         return reimbursement
 
-    def validate_for_submission(self, reimbursement):
-        """Custom validation called before submission"""
-        missing_qs = reimbursement.items.filter(requires_receipt=True, receipt__isnull=True)
-        if missing_qs.exists():
-            raise serializers.ValidationError({
-                "detail": "Some items require receipts before submission.",
-                "items_missing_receipts": [
-                    {"item_id": it.id, "item_name": it.item_name, "item_total": str(it.item_total)}
-                    for it in missing_qs
-                ],
-            })
-
-
+   
 class ReimbursementUpdateSerializer(serializers.ModelSerializer):
     items = ReimbursementItemSerializer(many=True, required=False)
     comments = ReimbursementCommentSerializer(many=True, required=False)
@@ -164,7 +175,7 @@ class ReimbursementUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Reimbursement
-        fields = ['id', 'status', 'total_amount', 'items', 'comments']
+        fields = ['id', 'total_amount', 'items', 'comments']
 
     def update(self, instance, validated_data):
         items_data = validated_data.pop('items', None)
@@ -181,11 +192,13 @@ class ReimbursementUpdateSerializer(serializers.ModelSerializer):
                     try:
                         # Make sure the item belongs to this reimbursement
                         item = instance.items.get(id=item_id)
+                        print(f"Updating item ID {item}")
                     except ReimbursementItem.DoesNotExist:
                         continue
 
                     # Use the nested serializer to update the item
                     item_serializer = ReimbursementItemSerializer(item, data=item_data, partial=True)
+                    print(item_serializer)
                     if item_serializer.is_valid():
                         item_serializer.save(status='pending')
 
@@ -218,7 +231,7 @@ class ReimbursementUpdateSerializer(serializers.ModelSerializer):
 
         # Update reimbursement status based on all items
         item_statuses = list(all_items.values_list('status', flat=True))
-        if 'pending' in item_statuses:
+        if any(status == 'pending' for status in item_statuses):
             instance.status = 'pending'
         elif all(status == 'approved' for status in item_statuses):
             instance.status = 'approved'
