@@ -7,10 +7,24 @@ purchase_limit = LimitConfig.objects.first()
 class PurchaseRequestItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = PurchaseRequestItem
-        fields = ['id', 'gl_code', 'expense_item', 'unit_price', 'quantity', 'total_price', 'status',
+        fields = ['id', 'gl_code', 'expense_item', 'unit_price', 'quantity', 'total_price', 'status', 'transportation_from', 'transportation_to',
                   'receipt_validated', 'extracted_amount', 'extracted_date', 'extracted_vendor', 'validation_errors']
         read_only_fields = ['total_price', 'receipt_validated', 'extracted_amount', 'extracted_date', 'extracted_vendor', 'validation_errors']
 
+    def validate(self, attrs):
+        unit_price = attrs.get('unit_price')
+        quantity = attrs.get('quantity')
+        expense_item = attrs.get('expense_item', '').strip().lower()
+        purchase_request_ref = attrs.get('purchase_request_ref')
+        receipt = attrs.get('receipt')
+
+        # Transportation rule
+        if expense_item == 'transportation' and not self.partial:
+            if not attrs.get('transportation_from') or not attrs.get('transportation_to'):
+                raise serializers.ValidationError(
+                    "Transportation items must include 'transportation_from' and 'transportation_to'."
+                )
+        
 class CommentSerializer(serializers.ModelSerializer):
     user = serializers.StringRelatedField()
     
@@ -110,19 +124,28 @@ class UpdatePurchaseRequestSerializer(serializers.ModelSerializer):
                 # Get the id from initial_data since it may not be in validated_data
                 items = self.initial_data.get('items') or []
                 item_id = (items[i].get('id') if i < len(items) and isinstance(items[i], dict) else None)
-                
+
                 if item_id:
                     try:
-                        # Make sure the item belongs to this reimbursement
+                        # Make sure the item belongs to this purchase request
                         item = instance.items.get(id=item_id)
                     except PurchaseRequestItem.DoesNotExist:
                         continue
 
+                    # Check if the item data has changed
+                    changed = any(
+                        item_data.get(field) is not None and item_data[field] != getattr(item, field)
+                        for field in ['unit_price', 'quantity', 'expense_item', 'transportation_from', 'transportation_to', 'receipt']
+                    )
+
                     # Use the nested serializer to update the item
+                    if changed:
+                        item_data['status'] = 'pending'
+                        print(item_data['status'])
                     item_serializer = PurchaseRequestItemSerializer(item, data=item_data, partial=True)
                     if item_serializer.is_valid():
-                        item_serializer.save(status='pending')
-                        
+                        item_serializer.save()
+
                 else:
                     # Ensure required fields are present for creating a new item
                     if 'unit_price' not in item_data or 'quantity' not in item_data:
@@ -130,21 +153,28 @@ class UpdatePurchaseRequestSerializer(serializers.ModelSerializer):
 
                     # Check if an item with the same key attributes already exists to avoid duplicates
                     existing_item = instance.items.filter(
-                        item_name=item_data.get('item_name'),
+                        expense_item=item_data.get('expense_item'),
                         unit_price=item_data.get('unit_price'),
                         quantity=item_data.get('quantity')
                     ).first()
 
                     if existing_item:
                         # Update the existing item instead of creating a duplicate
+                        changed = any(
+                            item_data.get(field) is not None and item_data[field] != getattr(existing_item, field)
+                            for field in ['unit_price', 'quantity', 'expense_item', 'transportation_from', 'transportation_to', 'receipt']
+                        )
+                        if changed:
+                            item_data['status'] = 'pending'
+                            print(item_data['status'])
                         item_serializer = PurchaseRequestItemSerializer(existing_item, data=item_data, partial=True)
                         if item_serializer.is_valid():
-                            item_serializer.save(status='pending')
+                            item_serializer.save()
                     else:
                         # Create a new item using the nested serializer
                         item_serializer = PurchaseRequestItemSerializer(data=item_data)
                         if item_serializer.is_valid():
-                            item_serializer.save(reimbursement=instance, status='pending')
+                            item_serializer.save(request=instance, status='pending')
                             
 
         # After all updates, recalculate total for ALL items

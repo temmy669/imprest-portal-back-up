@@ -47,6 +47,8 @@ class PurchaseRequestItem(models.Model):
     expense_item = models.CharField(max_length=100)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     quantity = models.PositiveIntegerField(default=1)
+    transportation_from = models.CharField(max_length=100, null=True, blank=True)
+    transportation_to = models.CharField(max_length=100, null=True, blank=True)
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
     receipt_validated = models.BooleanField(default=False)
