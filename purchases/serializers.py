@@ -24,6 +24,8 @@ class PurchaseRequestItemSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     "Transportation items must include 'transportation_from' and 'transportation_to'."
                 )
+                
+        return attrs
         
 class CommentSerializer(serializers.ModelSerializer):
     user = serializers.StringRelatedField()
