@@ -81,7 +81,7 @@ class ReimbursementItemSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        for field in ['unit_price', 'quantity', 'item_name', 'transportation_from', 'transportation_to', 'receipt']:
+        for field in ['unit_price', 'quantity', 'item_name', 'transportation_from', 'transportation_to', 'receipt', 'status']:
             setattr(instance, field, validated_data.get(field, getattr(instance, field)))
         instance.item_total = Decimal(instance.unit_price) * instance.quantity
         instance.save()
@@ -181,62 +181,55 @@ class ReimbursementUpdateSerializer(serializers.ModelSerializer):
         items_data = validated_data.pop('items', None)
         comments_data = validated_data.pop('comments', None)
 
+        updated_item_ids = []
+
         # Handle item updates and additions
         if items_data:
+            initial_items = self.initial_data.get('items') or []
+
             for i, item_data in enumerate(items_data):
-                # Get the id from initial_data since it may not be in validated_data
-                items = self.initial_data.get('items') or []
-                item_id = (items[i].get('id') if i < len(items) and isinstance(items[i], dict) else None)
-                
+                item_id = initial_items[i].get('id') if i < len(initial_items) else None
+
                 if item_id:
+                    # Existing item
                     try:
-                        # Make sure the item belongs to this reimbursement
                         item = instance.items.get(id=item_id)
-                        print(f"Updating item ID {item}")
                     except ReimbursementItem.DoesNotExist:
                         continue
 
-                    # Use the nested serializer to update the item
-                    item_serializer = ReimbursementItemSerializer(item, data=item_data, partial=True)
-                    print(item_serializer)
-                    if item_serializer.is_valid():
-                        item_serializer.save(status='pending')
+                    # Detect changes
+                    changed = any(
+                        item_data.get(field) is not None and item_data[field] != getattr(item, field)
+                        for field in ['unit_price', 'quantity', 'item_name', 'transportation_from', 'transportation_to', 'receipt']
+                    )
+
+                    if changed:
+                        print(changed)
+                        item_data['status'] = 'pending'
+                        print(item_data['status'])
+
+                    serializer = ReimbursementItemSerializer(item, data=item_data, partial=True)
+                    serializer.is_valid(raise_exception=True)
+                    updated_item = serializer.save()
+
+                    if changed:
+                        updated_item_ids.append(updated_item.id)
 
                 else:
-                    # Ensure required fields are present for creating a new item
-                    if 'unit_price' not in item_data or 'quantity' not in item_data:
-                        continue  # Skip if required fields are missing
+                    # NEW item
+                    serializer = ReimbursementItemSerializer(data=item_data)
+                    serializer.is_valid(raise_exception=True)
+                    new_item = serializer.save(reimbursement=instance, status='pending')
+                    updated_item_ids.append(new_item.id)
 
-                    # Check if an item with the same key attributes already exists to avoid duplicates
-                    existing_item = instance.items.filter(
-                        item_name=item_data.get('item_name'),
-                        unit_price=item_data.get('unit_price'),
-                        quantity=item_data.get('quantity')
-                    ).first()
+        # Recalculate total
+        instance.total_amount = sum(item.item_total for item in instance.items.all())
 
-                    if existing_item:
-                        # Update the existing item instead of creating a duplicate
-                        item_serializer = ReimbursementItemSerializer(existing_item, data=item_data, partial=True)
-                        if item_serializer.is_valid():
-                            item_serializer.save(status='pending')
-                    else:
-                        # Create a new item using the nested serializer
-                        item_serializer = ReimbursementItemSerializer(data=item_data)
-                        if item_serializer.is_valid():
-                            item_serializer.save(reimbursement=instance, status='pending')
-
-        # After all updates, recalculate total for ALL items
-        all_items = instance.items.all()
-        instance.total_amount = sum(item.item_total for item in all_items)
-
-        # Update reimbursement status based on all items
-        item_statuses = list(all_items.values_list('status', flat=True))
-        if any(status == 'pending' for status in item_statuses):
-            instance.status = 'pending'
-        elif all(status == 'approved' for status in item_statuses):
-            instance.status = 'approved'
-        else:
-            instance.status = 'declined'
+        # Update reimbursement status — ONLY based on updated items
+        if updated_item_ids:
+            updated_items = instance.items.filter(id__in=updated_item_ids)
+            if updated_items.filter(status='pending').exists():
+                instance.status = 'pending'
 
         # Handle comments
         if comments_data:

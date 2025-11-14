@@ -199,12 +199,13 @@ class ReimbursementRequestView(APIView):
         
         
 
-    def put(self, request, pk):
+    def put(self, request, pk, item_id=None):
         reimbursement = get_object_or_404(Reimbursement, pk=pk)
         serializer = ReimbursementUpdateSerializer(
             reimbursement, data=request.data, partial=True, context={'request': request}
         )
         if serializer.is_valid():
+            print(serializer.is_valid())
             serializer.save()
             return CustomResponse(True, "Reimbursement Request Updated Successfully", 200, serializer.data)
         return CustomResponse(False, serializer.errors, 400)

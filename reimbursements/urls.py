@@ -18,7 +18,7 @@ from django.conf.urls.static import static
 urlpatterns = [
     # List, create, update and submit reimbursement requests
     path('reimbursements/', ReimbursementRequestView.as_view(), name='reimbursement-list-create'),
-    path('reimbursements/<int:pk>/', ReimbursementRequestView.as_view(), name='reimbursement-update'),
+    path('reimbursements/<int:pk>/<int:item_id>/', ReimbursementRequestView.as_view(), name='reimbursement-update'),
    
     # Upload receipt for a specific reimbursement item
     path('reimbursement-items/receipt/', UploadReceiptView.as_view(), name='upload-receipt'),
