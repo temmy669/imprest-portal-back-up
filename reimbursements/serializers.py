@@ -122,50 +122,58 @@ class ReimbursementSerializer(serializers.ModelSerializer):
         return rep
     
     def create(self, validated_data):
-        items_data = validated_data.pop('items')
-        comments_data = validated_data.pop('comments', [])
-        user = self.context['request'].user
+            # REMOVE requester if present in validated_data
+            validated_data.pop('requester', None)
 
-        # Validate items BEFORE saving anything
-        invalid_items = [
-            item for item in items_data
-            if item.get('requires_receipt') and not item.get('receipt')
-        ]
-        if invalid_items:
-            raise serializers.ValidationError({
-                "detail": "Some items require receipts before submission.",
-                "items_missing_receipts": [
-                    {
-                        "item_name": i.get('item_name'),
-                        "unit_price": str(i.get('unit_price')),
-                        "quantity": i.get('quantity'),
-                    } for i in invalid_items
-                ]
-            })
+            items_data = validated_data.pop('items')
+            comments_data = validated_data.pop('comments', [])
 
-        # Compute total amount
-        total_amount = sum(Decimal(i['unit_price']) * i['quantity'] for i in items_data)
+            user = self.context['request'].user
 
-        # Create reimbursement
-        reimbursement = Reimbursement.objects.create(
-            requester=user,
-            total_amount=total_amount,
-            is_draft=False,
-            **validated_data
-        )
+            # Validate items
+            invalid_items = [
+                item for item in items_data
+                if item.get('requires_receipt') and not item.get('receipt')
+            ]
+            if invalid_items:
+                raise serializers.ValidationError({
+                    "detail": "Some items require receipts before submission.",
+                    "items_missing_receipts": [
+                        {
+                            "item_name": i.get('item_name'),
+                            "unit_price": str(i.get('unit_price')),
+                            "quantity": i.get('quantity'),
+                        } for i in invalid_items
+                    ]
+                })
 
-        # Create items
-        for item in items_data:
-            item['item_total'] = Decimal(item['unit_price']) * item['quantity']
-            ReimbursementItem.objects.create(reimbursement=reimbursement, **item)
-
-        # Create comments
-        for comment in comments_data:
-            ReimbursementComment.objects.create(
-                reimbursement=reimbursement, author=user, **comment
+            total_amount = sum(
+                Decimal(i['unit_price']) * i['quantity'] for i in items_data
             )
 
-        return reimbursement
+            reimbursement = Reimbursement.objects.create(
+                requester=user,
+                total_amount=total_amount,
+                is_draft=False,
+                **validated_data
+            )
+
+            # Create items
+            for item in items_data:
+                item['item_total'] = Decimal(item['unit_price']) * item['quantity']
+                ReimbursementItem.objects.create(
+                    reimbursement=reimbursement, **item
+                )
+
+            # Create comments
+            for comment in comments_data:
+                ReimbursementComment.objects.create(
+                    reimbursement=reimbursement,
+                    author=user,
+                    **comment
+                )
+
+            return reimbursement
 
    
 class ReimbursementUpdateSerializer(serializers.ModelSerializer):
