@@ -52,6 +52,7 @@ class PurchaseRequestItem(models.Model):
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
     receipt_validated = models.BooleanField(default=False)
+    receipt_no = models.CharField(max_length=100, null=True, blank=True)
     extracted_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     extracted_date = models.DateField(null=True, blank=True)
     extracted_vendor = models.CharField(max_length=255, null=True, blank=True)

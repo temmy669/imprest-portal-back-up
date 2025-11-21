@@ -8,8 +8,8 @@ class PurchaseRequestItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = PurchaseRequestItem
         fields = ['id', 'gl_code', 'expense_item', 'unit_price', 'quantity', 'total_price', 'status', 'transportation_from', 'transportation_to',
-                  'receipt_validated', 'extracted_amount', 'extracted_date', 'extracted_vendor', 'validation_errors']
-        read_only_fields = ['total_price', 'receipt_validated', 'extracted_amount', 'extracted_date', 'extracted_vendor', 'validation_errors']
+                  'receipt_validated', 'extracted_amount', 'extracted_date', 'extracted_vendor', 'validation_errors', 'receipt_no']
+        read_only_fields = ['total_price', 'receipt_validated', 'extracted_amount', 'extracted_date', 'extracted_vendor', 'validation_errors', 'receipt_no']
 
     def validate(self, attrs):
         unit_price = attrs.get('unit_price')
