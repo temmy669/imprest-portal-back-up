@@ -234,9 +234,7 @@ class UploadReceiptView(APIView):
         # Validate the receipt
         validation_result = validate_receipt(receipt_file.read(), item.total_price, item.request.created_at.date() if item.request.created_at else None)
 
-        if not validation_result['validated']:
-            return CustomResponse(False, "Receipt validation failed.", 400, {"validation_errors": validation_result['errors']})
-
+       
         # If valid, upload to Cloudinary or local
         if getattr(settings, "ENVIRONMENT", "development") == "production":
             # Upload to Cloudinary
@@ -247,15 +245,20 @@ class UploadReceiptView(APIView):
             fs = FileSystemStorage(location=os.path.join(settings.MEDIA_ROOT, 'receipts/'))
             filename = fs.save(f"receipts/{receipt_file.name}", receipt_file)
             receipt_url = fs.url(filename)
-            
+        
 
         # Save validation data to item
         item.receipt_validated = True
+        item.receipt_no = validation_result.get('receipt_number')
         item.extracted_amount = validation_result.get('extracted_amount')
         item.extracted_date = validation_result.get('extracted_date')
         item.extracted_vendor = validation_result.get('extracted_vendor')
         item.validation_errors = None  # Clear any previous errors
         item.save()
+        
+        if not validation_result['validated']:
+            return CustomResponse(False, "Receipt validation failed.", 400, {"validation_errors": validation_result['errors']})
+
 
         return CustomResponse(True, "Receipt uploaded and validated successfully.", 200, {"receipt_url": receipt_url})
     
