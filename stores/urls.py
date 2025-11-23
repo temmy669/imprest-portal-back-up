@@ -1,5 +1,12 @@
 from django.urls import path
-from .views import StoreByRegionView, RegionListView, AssignStoresToUserView, StoreListView, ListAreaManagersByRegion, StoreBudgetView
+from .views import (
+    StoreByRegionView, 
+    RegionListView, 
+    AssignStoresToUserView, 
+    StoreListView, 
+    ListAreaManagersByRegion, 
+    StoreBudgetView,
+    StoreListFromSAPView)
 
 urlpatterns = [
     path('regions', RegionListView.as_view(), name='list-regions'),
@@ -10,4 +17,5 @@ urlpatterns = [
     path('update-budget/<int:pk>/', StoreBudgetView.as_view(), name='update-budget'),
     path('add-store/', StoreBudgetView.as_view(), name='add-store'),
     path('', StoreListView.as_view(), name='store-list'),
+    path('sap-stores-list/', StoreListFromSAPView.as_view(), name='sap-store-list'),
 ]
