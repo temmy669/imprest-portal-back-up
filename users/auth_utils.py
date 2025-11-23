@@ -54,8 +54,6 @@ def create_or_update_user(graph_data):
     return user
 
 
-
-
 def fetch_token_data(code: str, verifier: str) -> Dict[str, Any]:
         return {
             'url': f"{settings.AZURE_AD_AUTHORITY}/oauth2/v2.0/token",

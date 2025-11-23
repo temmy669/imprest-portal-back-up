@@ -11,8 +11,12 @@ from utils.permissions import ManageUsers
 from rest_framework.permissions import IsAuthenticated
 from decimal import Decimal
 from utils.pagination import DynamicPageSizePagination
-
+from django.conf import settings
+from .sap_auth_utils import fetch_sap_token
+import requests
 User = get_user_model()
+
+
 
 
 class StoreListView(APIView):
@@ -28,7 +32,6 @@ class StoreListView(APIView):
         """
         Handles GET requests for store listing.
         """
-        
         stores = Store.objects.all()
         
         #filter stores by provided area managers
@@ -41,7 +44,30 @@ class StoreListView(APIView):
         serializer = StoreSerializer(stores, many=True)
         return CustomResponse(True, "Stores returned Successfully", data=serializer.data)
     
+class StoreListFromSAPView(APIView):
+    """
+    API endpoint for retrieving all stores from SAP.
     
+    Returns:
+    - List of all stores fetched from SAP system
+    """
+    def get(self, request):
+        """
+        Handles GET requests for store listing from SAP.
+        """
+        try:
+            sap_token = fetch_sap_token()
+            url = f"{settings.SAP_URL}/api/v1/stores"
+            headers = {
+                "Authorization": f"Bearer {sap_token}"
+            }
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            sap_stores = data.get("data", [])
+            return CustomResponse(True, "Stores fetched from SAP successfully", data=sap_stores)
+        except requests.RequestException as e:
+            return CustomResponse(False, f"Error fetching stores from SAP: {str(e)}", status.HTTP_500_INTERNAL_SERVER_ERROR) 
 
 class RegionListView(APIView):
     serializer_class = RegionSerializer()

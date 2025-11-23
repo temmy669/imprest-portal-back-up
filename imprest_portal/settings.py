@@ -22,6 +22,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Environment mode
 ENVIRONMENT = config('ENVIROMENT', default='development')
 
+SAP_URL = config('SAP_URL', default='http://localhost/')
+SAP_TOKEN_USERNAME = config('SAP_TOKEN_USERNAME', default='sap_user')
+SAP_TOKEN_PASSWORD = config('SAP_TOKEN_PASSWORD', default='sap_password')
 
 
 # Quick-start development settings - unsuitable for production
