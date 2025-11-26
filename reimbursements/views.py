@@ -189,6 +189,19 @@ class ReimbursementRequestView(APIView):
             purchase_requests = PurchaseRequest.objects.filter(id__in=purchase_request_refs)
             purchase_requests.update(reimbursement=reimbursement)
         
+        #save the receipt validated status from the purchase request items to reimbursement items
+        for item in reimbursement.items.all():
+            pr_item_ref = (item.purchase_request_ref or "").strip()
+            match = re.match(r'^PR-0*(\d+)', pr_item_ref)
+            if match:
+                pr_id = int(match.group(1))
+                try:
+                    pr_item = PurchaseRequestItem.objects.get(request__id=pr_id, expense_item=item.item_name, unit_price=item.unit_price, quantity=item.quantity)
+                    item.receipt_validated = pr_item.receipt_validated
+                    item.save()
+                except PurchaseRequestItem.DoesNotExist:
+                    continue
+        
         
         return CustomResponse(
             True,
