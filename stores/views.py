@@ -144,18 +144,29 @@ class AssignStoresToUserView(APIView):
             # Get all valid stores from the provided IDs
             stores = Store.objects.filter(id__in=store_ids)
             
-            # Replace existing assignments with new ones (atomic operation)
             #check if store alredy has area manager assigned
-            if stores.filter(area_manager__isnull=False).exists():
+          # Get the incoming stores
+            incoming_store_ids = stores.values_list("id", flat=True)
+
+            # Check if any incoming store already has a different manager
+            conflicting_stores = stores.filter(
+                area_manager__isnull=False
+            ).exclude(area_manager=user)
+
+            if conflicting_stores.exists():
                 return Response(
                     {
                         "success": False,
-                        "error": "Some of the selected stores already have an area manager assigned.",
-                        "detail": "Please choose different stores."
+                        "error": "Some selected stores already have an area manager.",
+                        "detail": "Please choose stores without assigned managers."
                     },
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            user.assigned_stores.set(stores)
+
+            # Append new stores to user’s existing list
+            user.assigned_stores.add(*incoming_store_ids)
+
+            # Update area manager on the store objects
             stores.update(area_manager=user)
             
             return Response(
