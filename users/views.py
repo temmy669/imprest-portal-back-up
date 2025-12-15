@@ -21,7 +21,7 @@ from urllib.parse import urlencode
 from .models import *
 from rest_framework.exceptions import AuthenticationFailed, ValidationError, APIException
 from django.http import JsonResponse
-from .serializers import UserSerializer
+from .serializers import UserSerializer, UserUpdateSerializer
 from urllib.parse import urlencode
 from django.db.models import Q, Count
 
@@ -33,6 +33,8 @@ from .auth import JWTAuthenticationFromCookie
 from django.http import HttpResponseRedirect
 from utils.pagination import DynamicPageSizePagination
 from collections import Counter
+from django.shortcuts import get_object_or_404
+
 
  
 
@@ -269,25 +271,21 @@ class UserView(APIView):
             return CustomResponse(True, "User Created successfully", data=serializer.data)
         return CustomResponse(False, serializer.errors, 400)
     
-    def put(self, request):
-        """
-        Update an existing user.
-        """
-        user_id = request.data.get('id')
-        if not user_id:
-            return CustomResponse(False, {"error": "User ID is required"}, 400)
-
-        try:
-            user = User.objects.get(id=user_id)
-        except User.DoesNotExist:
-            return CustomResponse(False, {"error": "User not found"}, 404)
-
-        serializer = UserSerializer(user, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return CustomResponse(True, {"message": "User updated successfully"}, 200)
-        return CustomResponse(False, serializer.errors, 400)
-    
+    def put(self, request, pk):
+        user = get_object_or_404(User, pk=pk)
+        
+        # CRITICAL: Use partial=True for PATCH requests
+        serializer = UserUpdateSerializer(user, data=request.data, partial=True)
+        
+        # CRITICAL: Use raise_exception=True to ensure validation errors return 400
+        serializer.is_valid(raise_exception=True)
+        
+        serializer.save()
+        return CustomResponse(True, {
+            "message": "User updated successfully",
+            # "user": serializer.data
+        }, 200)
+        
     def delete(self, request):
         """
         Delete an existing user.

@@ -19,6 +19,8 @@ from django.http import HttpResponse
 from collections import Counter
 from datetime import datetime
 from django.db.models import Q
+from utils.email_utils import send_rejection_notification, send_approval_notification
+from django.db import transaction
 
 class PurchaseRequestView(APIView):
     """
@@ -179,31 +181,52 @@ class ApprovePurchaseRequestView(APIView):
         description="Only Area Managers can approve requests for their stores",
     )
     def post(self, request, pk):
-        purchase_request = get_object_or_404(PurchaseRequest, pk=pk)
 
-        # Object-level permission check
-        self.check_object_permissions(request, purchase_request)
-        
-        if purchase_request.status == 'approved':
-            return CustomResponse(False, 'Item is already approved.', 400)
+        with transaction.atomic():
 
-        # Approve the request
-        purchase_request.status = 'approved'
-        purchase_request.voucher_id = f"PV-000{purchase_request.id}-{purchase_request.created_at.strftime('%Y-%m-%d')}"
-        purchase_request.area_manager = request.user
-        purchase_request.area_manager_approved_at = timezone.now()
-        purchase_request.save()
-        
-        purchase_request_items = purchase_request.items.all()
+            # Lock PR row
+            pr = PurchaseRequest.objects.select_for_update().get(pk=pk)
 
-        # Approve all related items
-        purchase_request_items.update(status='approved')
+            # Object-level permission check
+            self.check_object_permissions(request, pr)
 
-        return CustomResponse(True,{
-            "message": "Purchase request and items approved successfully.",
-            "voucher_id": purchase_request.voucher_id
-        }, 200)
+            if pr.status == "approved":
+                return CustomResponse(False, "Request already approved.", 400)
 
+            # Fetch and lock all related items
+            items = list(pr.items.select_for_update())
+
+            # ❌ If any item is declined → PR cannot be approved
+            if any(item.status == "declined" for item in items):
+                return CustomResponse(
+                    False,
+                    "Cannot approve request because one or more items are declined.",
+                    400
+                )
+
+            # All items must become approved
+            for item in items:
+                item.status = "approved"
+                item.save()
+
+            # Approve the PR itself
+            pr.status = "approved"
+            pr.voucher_id = f"PV-{pr.id:04d}-{pr.created_at.strftime('%Y-%m-%d')}"
+            pr.area_manager = request.user
+            pr.area_manager_approved_at = timezone.now()
+            pr.save()
+
+        # Optionally trigger approval email (if you want)
+        send_approval_notification(pr)
+
+        return CustomResponse(
+            True,
+            {
+                "message": "Purchase request and all items approved successfully.",
+                "voucher_id": pr.voucher_id
+            },
+            200
+        )
 
         
 class ApprovePurchaseRequestItemView(APIView):
@@ -221,34 +244,51 @@ class ApprovePurchaseRequestItemView(APIView):
         # Object-level permission check
         self.check_object_permissions(request, pr)
 
-        if item.status == 'approved':
-            return CustomResponse(False, 'Item is already approved.', 400)
+        if item.status == "approved":
+            return CustomResponse(False, "Item is already approved.", 400)
 
-        item.status = 'approved'
-        item.save()
+        with transaction.atomic():
 
-        items = pr.items.all()
+            # Lock PR and item row
+            pr = PurchaseRequest.objects.select_for_update().get(pk=pk)
+            item = PurchaseRequestItem.objects.select_for_update().get(pk=item_id, request=pr)
 
+            # Approve this item
+            item.status = "approved"
+            item.save()
 
-        # Check if any item is declined
-        if any(i.status == 'declined' for i in items):
-            pr.status = 'declined'
-            pr.area_manager = request.user
-            pr.area_manager_declined_at = timezone.now()
-            pr.save()
-            
-         # Check if all items are approved
-        elif all(i.status == 'approved' for i in items):
-            pr.status = 'approved'
-            pr.voucher_id = f"PV-000{pr.id}-{pr.created_at.strftime('%Y-%m-%d')}"
-            pr.area_manager = request.user
-            pr.area_manager_approved_at = timezone.now()
-            pr.save()
+            # Re-fetch all items safely
+            items = list(pr.items.select_for_update())
 
-        return CustomResponse(True,
+            # If ANY item is declined → PR remains declined
+            if any(i.status == "declined" for i in items):
+                pr.status = "declined"
+                pr.area_manager = request.user
+                pr.area_manager_declined_at = timezone.now()
+                pr.save()
+                
+                # Decline emails are only sent when an item is DECLINED, not approved.
+
+            # If ALL items are approved → PR is approved
+            elif all(i.status == "approved" for i in items):
+                pr.status = "approved"
+                pr.voucher_id = f"PV-{pr.id:04d}-{pr.created_at.strftime('%Y-%m-%d')}"
+                pr.area_manager = request.user
+                pr.area_manager_approved_at = timezone.now()
+                pr.save()
+                send_approval_notification(pr)  # Uncomment when ready
+
+            # Else: some pending, some approved → PR stays pending
+            else:
+                pr.status = "pending"
+                pr.save()
+
+        return CustomResponse(
+            True,
             {
-                'status': 'approved',
-                'item_id': item.id
+                "status": item.status,
+                "item_id": item.id,
+                "purchase_request_status": pr.status
             },
             200
         )
@@ -258,104 +298,96 @@ class DeclinePurchaseRequestView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
     permission_classes = [IsAuthenticated, DeclinePurchaseRequest]
 
-    @extend_schema(
-        summary="Decline purchase request",
-        description="Declines request with mandatory comment",
-    )
     def post(self, request, pk):
         pr = get_object_or_404(PurchaseRequest, pk=pk)
-
-        # Object-level permission check
         self.check_object_permissions(request, pr)
 
-        comment_text = request.data.get('comment', '').strip()
+        comment_text = request.data.get("comment", "").strip()
         if not comment_text:
-            return CustomResponse(False,
-               'Comment is required when declining',
-                400
-            )
+            return CustomResponse(False, "Comment is required when declining.", 400)
 
-        pr.status = 'declined'
-        pr.area_manager = request.user
-        pr.area_manager_declined_at = timezone.now()
-        pr.save()
-        
-        # Update all items to declined
-        purchase_request_items = pr.items.all()
-        purchase_request_items.update(status='declined')
-        
+        with transaction.atomic():
+            # Lock the PR to prevent concurrency issues
+            pr = PurchaseRequest.objects.select_for_update().get(pk=pk)
 
-        # Create decline comment
-        Comment.objects.create(
-            request=pr,
-            user=request.user,
-            text=comment_text
-        )
+            if pr.status in ("approved", "declined"):
+                return CustomResponse(False, "This purchase request has already been processed.", 400)
 
-        return CustomResponse(True,
-            {
-                'status': 'declined',
-                'comment': comment_text
-            },
-            200
-        )
-
-class DeclinePurchaseRequestItemView(APIView):
-    authentication_classes = [JWTAuthenticationFromCookie]
-    permission_classes = [IsAuthenticated, ApprovePurchaseRequest]
-
-    @extend_schema(
-        summary="Decline purchase request item",
-        description="Declines a specific item in a purchase request",
-    )
-    def post(self, request, pk, item_id):
-        pr = get_object_or_404(PurchaseRequest, pk=pk)
-        item = get_object_or_404(PurchaseRequestItem, pk=item_id, request=pr)
-
-        self.check_object_permissions(request, pr)
-
-        comment_text = request.data.get('comment', '').strip()
-        
-        if not comment_text:
-            return CustomResponse(False,
-                 'Comment is required when declining',
-                400
-            )
-
-        if item.status == 'declined':
-            return CustomResponse(False, "Item is already declined", 400)
-
-        item.status = 'declined'
-        item.save()
-        
-        items = pr.items.all()
-        
-        # Check if all items are still pending
-        if any(item.status == 'pending' for item in  items):
-            pr.status = 'pending'
-        
-        elif all(item.status != 'pending' for item in items):
-            print("okay")
-            pr.status = 'declined'
+            # Update PR status
+            pr.status = "declined"
             pr.area_manager = request.user
             pr.area_manager_declined_at = timezone.now()
             pr.save()
 
-        # Save comment (if supported)
-        Comment.objects.create(
-            request=pr,
-            user=request.user,
-            text=comment_text
-        )
+            # Decline all items
+            pr.items.update(status="declined")
 
-        return CustomResponse(True,
-            {
-                'status': 'declined',
-                'item_id': item.id,
-                'comment': comment_text
-            },
-            200
-        )
+            # Create decline comment
+            comment = Comment.objects.create(
+                request=pr,
+                user=request.user,
+                text=comment_text
+            )
+
+        # Send notification AFTER the transaction commits
+        send_rejection_notification(pr, comment)
+
+        return CustomResponse(True, {
+            "id": pr.id,
+            "status": "declined",
+            "comment": comment_text
+        }, 200)
+
+class DeclinePurchaseRequestItemView(APIView):
+    authentication_classes = [JWTAuthenticationFromCookie]
+    permission_classes = [IsAuthenticated, DeclinePurchaseRequest]
+
+    def post(self, request, pk, item_pk):
+        item = get_object_or_404(PurchaseRequestItem, pk=item_pk, request_id=pk)
+        pr = item.request
+        self.check_object_permissions(request, pr)
+
+        comment_text = request.data.get("comment", "").strip()
+        if not comment_text:
+            return CustomResponse(False, "Comment is required for item decline.", 400)
+
+        with transaction.atomic():
+            # Lock PR and items for concurrency safety
+            pr = PurchaseRequest.objects.select_for_update().get(pk=pk)
+            item = pr.items.select_for_update().get(pk=item_pk)
+
+            if pr.status in ("approved", "declined"):
+                return CustomResponse(False, "This purchase request has already been processed.", 400)
+
+            # Decline the single item
+            item.status = "declined"
+            item.save()
+
+            # Create comment for this item
+            comment = Comment.objects.create(
+                request=pr,
+                user=request.user,
+                text=comment_text
+            )
+
+            # Determine if all items are now declined
+            all_declined = not pr.items.exclude(status="declined").exists()
+
+            if all_declined:
+                pr.status = "declined"
+                pr.area_manager = request.user
+                pr.area_manager_declined_at = timezone.now()
+                pr.save()
+
+        # Send notification if PR became fully declined
+        if all_declined:
+            send_rejection_notification(pr, comment)
+
+        return CustomResponse(True, {
+            "item": item_pk,
+            "status": "declined",
+            "comment": comment_text
+        }, 200)
         
         
 class SearchPurchaseRequestView(APIView):
