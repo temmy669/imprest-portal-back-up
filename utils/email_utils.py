@@ -244,12 +244,12 @@ def send_reimbursement_rejection_notification(reimbursement, user, comment):
         rejection_date = reimbursement.internal_control_declined_at
         status = reimbursement.get_internal_control_status_display()
         request_date = reimbursement.area_manager_approval_date.strftime("%b %d, %Y %I:%M %p") if reimbursement.area_manager_approval_date else "N/A",
-    
+        
     context = {
         'request_id': f"RR-{reimbursement.id:04d}",
         'name':name,
         'rejector_name': rejector,
-        'rejection_reason': comment.text if comment else "No reason provided.",
+        'rejection_reason': comment if comment else "No reason provided.",
         'items': items, 
         'rejection_date': rejection_date,
         'company_name': settings.COMPANY_NAME,

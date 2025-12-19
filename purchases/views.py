@@ -342,8 +342,8 @@ class DeclinePurchaseRequestItemView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
     permission_classes = [IsAuthenticated, DeclinePurchaseRequest]
 
-    def post(self, request, pk, item_pk):
-        item = get_object_or_404(PurchaseRequestItem, pk=item_pk, request_id=pk)
+    def post(self, request, pk, item_id):
+        item = get_object_or_404(PurchaseRequestItem, pk=item_id, request_id=pk)
         pr = item.request
         self.check_object_permissions(request, pr)
 
@@ -354,7 +354,7 @@ class DeclinePurchaseRequestItemView(APIView):
         with transaction.atomic():
             # Lock PR and items for concurrency safety
             pr = PurchaseRequest.objects.select_for_update().get(pk=pk)
-            item = pr.items.select_for_update().get(pk=item_pk)
+            item = pr.items.select_for_update().get(pk=item_id)
 
             if pr.status in ("approved", "declined"):
                 return CustomResponse(False, "This purchase request has already been processed.", 400)
@@ -384,7 +384,7 @@ class DeclinePurchaseRequestItemView(APIView):
             send_rejection_notification(pr, comment)
 
         return CustomResponse(True, {
-            "item": item_pk,
+            "item": item_id,
             "status": "declined",
             "comment": comment_text
         }, 200)

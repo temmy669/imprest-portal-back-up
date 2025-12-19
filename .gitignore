@@ -63,6 +63,7 @@ media/
 
 #dirs
 receipts/
+JUNK/
 
 create_bank.py
 test_receipt_validation.py
