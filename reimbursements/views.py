@@ -226,7 +226,6 @@ class ReimbursementRequestView(APIView):
         return CustomResponse(False, serializer.errors, 400)
 
 
-
 class UploadReceiptView(APIView):
     parser_classes = [MultiPartParser, FormParser]
     authentication_classes = [JWTAuthenticationFromCookie]
@@ -245,12 +244,42 @@ class UploadReceiptView(APIView):
             item = PurchaseRequestItem.objects.get(id=item_id)
         except PurchaseRequestItem.DoesNotExist:
             return CustomResponse(False, "Invalid item ID.", 400)
+        
+        # Check if receipt already validated and uploaded
+        if item.receipt_validated:
+            return CustomResponse(
+                False, 
+                "Receipt has already been uploaded and validated for this item.", 
+                400,
+                {
+                    "receipt_no": item.receipt_no,
+                    "extracted_vendor": item.extracted_vendor
+                }
+            )
 
-        # Validate the receipt
-        validation_result = validate_receipt(receipt_file.read(), item.total_price, item.request.created_at.date() if item.request.created_at else None)
+        # Read the file content for validation
+        receipt_data = receipt_file.read()
+        
+        # Validate the receipt BEFORE uploading
+        validation_result = validate_receipt(
+            receipt_data, 
+            item.total_price, 
+            item.request.created_at.date() if item.request.created_at else None
+        )
 
-       
-        # If valid, upload to Cloudinary or local
+        # Check validation result BEFORE uploading
+        if not validation_result['validated']:
+            return CustomResponse(
+                False, 
+                "Receipt validation failed.", 
+                400, 
+                {"validation_errors": validation_result['errors']}
+            )
+
+        # Only upload if validation passed
+        # Need to reset file pointer since we already read it
+        receipt_file.seek(0)
+        
         if getattr(settings, "ENVIRONMENT", "development") == "production":
             # Upload to Cloudinary
             result = cloudinary.uploader.upload(receipt_file, folder="receipts/")
@@ -260,23 +289,22 @@ class UploadReceiptView(APIView):
             fs = FileSystemStorage(location=os.path.join(settings.MEDIA_ROOT, 'receipts/'))
             filename = fs.save(f"receipts/{receipt_file.name}", receipt_file)
             receipt_url = fs.url(filename)
-        
 
-        # Save validation data to item
+        # Save validation data to item (only reached if validation passed)
         item.receipt_validated = True
         item.receipt_no = validation_result.get('receipt_number')
         item.extracted_amount = validation_result.get('extracted_amount')
         item.extracted_date = validation_result.get('extracted_date')
         item.extracted_vendor = validation_result.get('extracted_vendor')
-        item.validation_errors = None  # Clear any previous errors
+        item.validation_errors = None
         item.save()
-        
-        if not validation_result['validated']:
-            return CustomResponse(False, "Receipt validation failed.", 400, {"validation_errors": validation_result['errors']})
 
-
-        return CustomResponse(True, "Receipt uploaded and validated successfully.", 200, {"receipt_url": receipt_url})
-    
+        return CustomResponse(
+            True, 
+            "Receipt uploaded and validated successfully.", 
+            200, 
+            {"receipt_url": receipt_url}
+        )
     
 class ApproveReimbursementView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
@@ -361,6 +389,8 @@ class ApproveReimbursementItemView(APIView):
 
                 item.internal_control_status = "approved"
                 item.save()
+                
+                #Build item from reimbursements data to complete byd structure
 
                 if all(i.internal_control_status == "approved" for i in items):
                     re.internal_control_status = "approved"
