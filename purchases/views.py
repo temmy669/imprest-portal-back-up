@@ -165,7 +165,7 @@ class ListApprovedPurchaseRequestView(APIView):
             status='approved', 
             requester=request.user
         ).filter(
-            Q(reimbursement__isnull=True) | Q(reimbursement__status='pending')
+            Q(reimbursement__isnull=True) 
             ).order_by('-created_at')
         serializer = ApprovedPurchaseRequestSerializer(queryset, many=True)
 
