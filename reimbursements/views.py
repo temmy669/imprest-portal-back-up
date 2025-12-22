@@ -205,8 +205,7 @@ class ReimbursementRequestView(APIView):
             pr_item = (
                 PurchaseRequestItem.objects
                 .filter(
-                    request__id=pr_id,
-                    expense_item=item.item_name,
+                    request_id=pr_id,
                 )
                 .order_by('-id')
                 .first()
