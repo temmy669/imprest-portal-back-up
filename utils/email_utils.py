@@ -70,8 +70,7 @@ def send_rejection_notification(purchase_request, comment):
         'request_date': purchase_request.created_at.strftime("%b %d, %Y %I:%M %p"),
         'status': purchase_request.get_status_display()
     }
-
-
+    
     html_message = render_to_string('pr_rejection.html', context)
     plain_message = strip_tags(html_message)
     
@@ -161,17 +160,17 @@ def send_reimbursement_approval_notification(reimbursement, user):
     
     if user.role.name == "Area Manager":
         name = requester.get_full_name()
-        approved_by = reimbursement.area_manager.get_full_name() if reimbursement.area_manager else "N/A"
-        approval_date = reimbursement.area_manager_approved_at
-        status = reimbursement.get_status_display()
-        request_date = reimbursement.created_at.strftime("%b %d, %Y %I:%M %p"),
+        # approved_by = reimbursement.area_manager.get_full_name() if reimbursement.area_manager else "N/A"
+        # approval_date = reimbursement.area_manager_approved_at
+        # status = reimbursement.get_status_display()
+        # request_date = reimbursement.created_at.strftime("%b %d, %Y %I:%M %p"),
         
     elif user.role.name == "Internal Control":
         name = area_manager.get_full_name()
-        approved_by = reimbursement.internal_control.get_full_name() if reimbursement.internal_control else "N/A"
-        approval_date = reimbursement.internal_control_approved_at
-        status = reimbursement.get_internal_control_status_display()
-        request_date = reimbursement.area_manager_approval_date.strftime("%b %d, %Y %I:%M %p") if reimbursement.area_manager_approval_date else "N/A",
+        # approved_by = reimbursement.internal_control.get_full_name() if reimbursement.internal_control else "N/A"
+        # approval_date = reimbursement.internal_control_approved_at
+        # status = reimbursement.get_internal_control_status_display()
+        # request_date = reimbursement.area_manager_approved_at.strftime("%b %d, %Y %I:%M %p") if reimbursement.area_manager_approval_date else "N/A",
     
     # Build context for email template
     context = {
@@ -243,7 +242,7 @@ def send_reimbursement_rejection_notification(reimbursement, user, comment):
         # comments =  reimbursement.comments.filter(author=reimbursement.internal_control).order_by('-created_at').first()
         rejection_date = reimbursement.internal_control_declined_at
         status = reimbursement.get_internal_control_status_display()
-        request_date = reimbursement.area_manager_approval_date.strftime("%b %d, %Y %I:%M %p") if reimbursement.area_manager_approval_date else "N/A",
+        request_date = reimbursement.area_manager_approved_at.strftime("%b %d, %Y %I:%M %p") if reimbursement.area_manager_approved_at else "N/A",
         
     context = {
         'request_id': f"RR-{reimbursement.id:04d}",
