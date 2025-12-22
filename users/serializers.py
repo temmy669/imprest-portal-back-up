@@ -87,7 +87,6 @@ class UserSerializer(serializers.ModelSerializer):
         return user
 
 
-# SERIALIZER - Add this field to your serializer
 class UserUpdateSerializer(serializers.ModelSerializer):
     new_area_manager_id = serializers.IntegerField(required=False, allow_null=True, write_only=True)
     
