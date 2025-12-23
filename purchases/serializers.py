@@ -73,7 +73,7 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
         #return approval details if status is approved
         if instance.status == "approved":
             rep['approved_by'] = f"{instance.area_manager.first_name} {instance.area_manager.last_name}" if instance.area_manager else None
-            rep['approval_date'] = instance.area_manager_approved_at.strftime('%d-%m-%Y')
+            rep['approval_date'] = instance.area_manager_approved_at.strftime('%d-%m-%Y') if instance.area_manager_approved_at else None
     
         return rep
         
