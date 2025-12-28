@@ -71,9 +71,9 @@ class PurchaseRequestView(APIView):
         # print(status_list)
         status_count_dict = dict(Counter(status_list))
         
-        #return empty status count if queryset is empty after filters
-        if not queryset.exists():
-            status_count_dict = {}
+        # #return empty status count if queryset is empty after filters
+        # if not queryset.exists():
+        #     status_count_dict = {}
             
 
         # Serialize paginated data
@@ -165,7 +165,7 @@ class ListApprovedPurchaseRequestView(APIView):
             status='approved', 
             requester=request.user
         ).filter(
-            Q(reimbursement__isnull=True) | Q(reimbursement__status='pending')
+            Q(reimbursement__isnull=True) 
             ).order_by('-created_at')
         serializer = ApprovedPurchaseRequestSerializer(queryset, many=True)
 
@@ -354,7 +354,7 @@ class DeclinePurchaseRequestItemView(APIView):
         with transaction.atomic():
             # Lock PR and items for concurrency safety
             pr = PurchaseRequest.objects.select_for_update().get(pk=pk)
-            item = pr.items.select_for_update().get(pk=item_id)
+            item = PurchaseRequestItem.objects.select_for_update().get(pk=item_id)
 
             if pr.status in ("approved", "declined"):
                 return CustomResponse(False, "This purchase request has already been processed.", 400)
@@ -372,15 +372,17 @@ class DeclinePurchaseRequestItemView(APIView):
 
             # Determine if all items are now declined
             all_declined = not pr.items.exclude(status="declined").exists()
+            any_declined = pr.items.filter(status="declined").exists()
+            not_pending = not pr.items.filter(status="pending").exists()
 
-            if all_declined:
+            if any_declined and not_pending:
                 pr.status = "declined"
                 pr.area_manager = request.user
                 pr.area_manager_declined_at = timezone.now()
                 pr.save()
 
         # Send notification if PR became fully declined
-        if all_declined:
+        if any_declined:
             send_rejection_notification(pr, comment)
 
         return CustomResponse(True, {

@@ -81,11 +81,13 @@ class ReimbursementItemSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        for field in ['unit_price', 'quantity', 'item_name', 'transportation_from', 'transportation_to', 'receipt', 'status']:
-            setattr(instance, field, validated_data.get(field, getattr(instance, field)))
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+
         instance.item_total = Decimal(instance.unit_price) * instance.quantity
         instance.save()
         return instance
+
 
 
 class ReimbursementSerializer(serializers.ModelSerializer):
@@ -214,7 +216,9 @@ class ReimbursementUpdateSerializer(serializers.ModelSerializer):
                     if changed:
                         print(changed)
                         item_data['status'] = 'pending'
+                        item_data['internal_control_status'] = 'pending'
                         print(item_data['status'])
+                        
 
                     serializer = ReimbursementItemSerializer(item, data=item_data, partial=True)
                     serializer.is_valid(raise_exception=True)
@@ -238,6 +242,7 @@ class ReimbursementUpdateSerializer(serializers.ModelSerializer):
             updated_items = instance.items.filter(id__in=updated_item_ids)
             if updated_items.filter(status='pending').exists():
                 instance.status = 'pending'
+                instance.internal_control_status = 'pending'
 
         # Handle comments
         if comments_data:
