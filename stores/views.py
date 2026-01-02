@@ -95,6 +95,12 @@ class RegionListView(APIView):
             return CustomResponse(True, "Region Added", data=serializer.data)
         return CustomResponse(False, serializer.errors, 400)
 
+    def delete(self, request, pk):
+        """Deletes a region"""
+        region = get_object_or_404(Region, pk=pk)
+        region.delete()
+        return CustomResponse(True, "Region Deleted Successfully")
+
 
 class StoreByRegionView(APIView):
     serializer_class = StoreRegionSerializer()
@@ -263,3 +269,4 @@ class StoreBudgetView(APIView):
             return CustomResponse(True, "Budget updated successfully", 200, serializer.data)
 
         return CustomResponse(False, serializer.errors, 400)
+

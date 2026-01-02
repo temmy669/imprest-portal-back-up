@@ -71,9 +71,9 @@ class PurchaseRequestView(APIView):
         # print(status_list)
         status_count_dict = dict(Counter(status_list))
         
-        #return empty status count if queryset is empty after filters
-        if not queryset.exists():
-            status_count_dict = {}
+        # #return empty status count if queryset is empty after filters
+        # if not queryset.exists():
+        #     status_count_dict = {}
             
 
         # Serialize paginated data

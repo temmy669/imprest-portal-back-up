@@ -144,9 +144,9 @@ class ReimbursementRequestView(APIView):
                 return CustomResponse(False, "Only RR-XXXX search is supported in 'q'", 400)
         
         
-        #return empty status count if queryset is empty after filters
-        if not queryset.exists():
-            status_count_dict = {}
+        # #return empty status count if queryset is empty after filters
+        # if not queryset.exists():
+        #     status_count_dict = {}
             
         # --- Pagination and serialization ---
         
