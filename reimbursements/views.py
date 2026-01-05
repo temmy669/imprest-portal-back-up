@@ -37,7 +37,7 @@ import re
 from utils.receipt_validation import validate_receipt
 from django.db import transaction
 from utils.email_utils import send_reimbursement_rejection_notification, send_reimbursement_approval_notification
-
+from .post_to_byd import build_sap_payload
 
 class ReimbursementRequestView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
@@ -760,7 +760,9 @@ class DisbursemntView(APIView):
             
         reimbursement.updated_by = request.user
         reimbursement.save(user=request.user)
-       
+
+        sap_payload = build_sap_payload(reimbursement)
+
         
         message = f"Reimbursement disbursed by Treasurer successfully"
 
