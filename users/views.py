@@ -282,8 +282,7 @@ class UserView(APIView):
         
         serializer.save()
         return CustomResponse(True, {
-            "message": "User updated successfully",
-            # "user": serializer.data
+         "User updated successfully",
         }, 200)
         
     def delete(self, request):
