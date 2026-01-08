@@ -19,11 +19,12 @@ from django.core.files.storage import FileSystemStorage
 import os
 from django.conf import settings
 from django.utils import timezone
+from decimal import InvalidOperation, Decimal
 
 from django.core.files.storage import FileSystemStorage
 from rest_framework.parsers import MultiPartParser, FormParser
 
-from django.db.models import Q, Count
+from django.db.models import Q, Count, Sum
 from collections import Counter
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from datetime import datetime
@@ -169,11 +170,29 @@ class ReimbursementRequestView(APIView):
         
 
     def post(self, request):
+        
         # Step 1: Create reimbursement (draft by default)
         serializer = ReimbursementSerializer(data=request.data, context={'request': request})
         if not serializer.is_valid():
-            return CustomResponse(False, "Invalid data", 400, serializer.errors)
+            errors = serializer.errors
 
+            # Try to extract a meaningful message
+            message = "Invalid data"
+
+            if isinstance(errors, dict):
+                # Prefer budget error if present
+                if 'budget' in errors:
+                    message = errors['budget'][0]
+                # Fallback to non_field_errors
+                elif 'non_field_errors' in errors:
+                    message = errors['non_field_errors'][0]
+
+            return CustomResponse(
+                False,
+                message,
+                400,
+                None
+            )
         
         reimbursement = serializer.save(requester=request.user)
 

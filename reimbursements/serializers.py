@@ -7,6 +7,10 @@ from .models import (
 from purchases.models import LimitConfig
 from decimal import Decimal
 from utils.receipt_validation import validate_receipt
+from django.utils import timezone
+from django.db.models import Sum
+from rest_framework.exceptions import ValidationError
+
 
 purchase_limit = LimitConfig.objects.first()
 if purchase_limit is None:
@@ -102,6 +106,53 @@ class ReimbursementSerializer(serializers.ModelSerializer):
             'internal_control_status', 'store', 'disbursement_status', 'bank', 'account'
         ]
         read_only_fields = ['requester', 'disbursement_status']
+        
+    def validate(self, attrs):
+        request = self.context['request']
+        user = request.user
+        store = user.store
+
+        items = attrs.get('items', [])
+
+        if not store or not store.budget:
+            return attrs  # No budget configured → allow
+
+        # 🔹 Calculate incoming reimbursement total
+        incoming_total = sum(
+            Decimal(item['unit_price']) * item['quantity']
+            for item in items
+        )
+
+        # 🔹 Calculate current week boundaries (safe, timezone-aware)
+        now = timezone.now()
+        start_week = now - timezone.timedelta(days=now.weekday())
+        start_week = start_week.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_week = start_week + timezone.timedelta(days=7)
+
+        weekly_expenses = (
+            Reimbursement.objects.filter(
+                store=store,
+                created_at__gte=start_week,
+                created_at__lt=end_week,
+            )
+            .aggregate(total=Sum('total_amount'))['total']
+            or Decimal('0.00')
+        )
+
+        projected_total = weekly_expenses + incoming_total
+
+        if projected_total > store.budget:
+            raise ValidationError({
+                "budget": (
+                    f"Weekly budget exceeded. "
+                    f"Spent: ₦{weekly_expenses:,.2f}, "
+                    f"Request: ₦{incoming_total:,.2f}, "
+                    f"Budget: ₦{store.budget:,.2f}"
+                )
+            })
+
+        return attrs
+
 
     def to_representation(self, instance):
         rep = super().to_representation(instance)
