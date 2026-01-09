@@ -45,9 +45,9 @@ class PurchaseRequestView(APIView):
         print(user)
         queryset = PurchaseRequest.objects.all().order_by('-created_at')
 
-        # Restaurant Managers only see their own requests
+        # Restaurant Managers only see requests from their own stores
         if user.role.name == 'Restaurant Manager':
-            queryset = queryset.filter(requester=user)
+            queryset = queryset.filter(store_id = user.store_id)
             
         # Area Managers see requests from their stores
         elif user.role.name == 'Area Manager':
