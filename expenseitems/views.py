@@ -28,7 +28,16 @@ class ExpenseItemView(APIView):
         
         items = paginator.paginate_queryset(items, request)
         serializer = ItemSerializer(items, many=True)
-        return CustomResponse(True, "Items Retrieved Successfully", 200, serializer.data)
+        return CustomResponse(True, 
+                              "Items Retrieved Successfully", 
+                              200,
+                              {"results": serializer.data,
+                               "count": paginator.page.paginator.count,
+                               "num_pages": paginator.page.paginator.num_pages,
+                               "current_page": paginator.page.number,
+                               "next": paginator.get_next_link(),
+                               "previous": paginator.get_previous_link()
+                              })
     
     
     def post(self, request):

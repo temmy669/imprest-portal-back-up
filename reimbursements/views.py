@@ -588,6 +588,7 @@ class DeclineReimbursementItemView(APIView):
                     re.internal_control_status = "pending"
                 else:
                     re.internal_control_status = "declined"
+                    re.status = "pending"
                     re.internal_control = request.user
                     re.internal_control_declined_at = timezone.now()
 
