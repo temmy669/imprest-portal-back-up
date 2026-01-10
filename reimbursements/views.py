@@ -58,7 +58,7 @@ class ReimbursementRequestView(APIView):
 
         # Role-based access
         if user.role.name == 'Restaurant Manager':
-            queryset = queryset.filter(requester=user)
+            queryset = queryset.filter(store_id=user.store_id)
         elif user.role.name == 'Area Manager':
             queryset = queryset.filter(store__in=user.assigned_stores.all())
         elif user.role.name == 'Internal Control':
@@ -180,12 +180,17 @@ class ReimbursementRequestView(APIView):
             message = "Invalid data"
 
             if isinstance(errors, dict):
-                # Prefer budget error if present
-                if 'budget' in errors:
-                    message = errors['budget'][0]
-                # Fallback to non_field_errors
-                elif 'non_field_errors' in errors:
-                    message = errors['non_field_errors'][0]
+                if 'detail' in errors:
+                    message = errors['detail']
+                else:
+                    first_key = next(iter(errors))
+                    first_error = errors[first_key]
+
+                    if isinstance(first_error, list):
+                        message = first_error[0]
+                    else:
+                        message = first_error
+
 
             return CustomResponse(
                 False,
