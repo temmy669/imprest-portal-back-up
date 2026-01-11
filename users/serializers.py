@@ -153,6 +153,13 @@ class UserUpdateSerializer(serializers.ModelSerializer):
                 and new_role_name != 'Area Manager'
             )
             
+            #check if changing from Restaurant Manager to something else
+            is_role_change_from_restaurant_manager = (
+                prev_role == 'Restaurant Manager'
+                and new_role_name != 'Restaurant Manager'
+            )
+        
+            
             # -----------------------------
             # 2. VALIDATE INCOMING STORE ASSIGNMENTS
             # -----------------------------
@@ -202,6 +209,13 @@ class UserUpdateSerializer(serializers.ModelSerializer):
                 
                 # Clear store assignments for the demoted area manager
                 instance.store = None
+            
+            if is_role_change_from_restaurant_manager:
+                # if the new role is area manager clear just the store and leave the region
+                instance.store = None
+                if new_role_name != 'Area Manager':
+                    instance.region = None
+                
             
             # -----------------------------
             # 5. HANDLE STORE ASSIGNMENTS (for current/new Area Managers)
