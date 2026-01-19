@@ -17,7 +17,7 @@ class Store(models.Model):
     code = models.CharField(max_length=20, unique=True)
     region = models.ForeignKey(Region, on_delete=models.PROTECT, related_name='region_stores')
     budget = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
-    balance = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    # balance = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)  # track when store created
     updated_at = models.DateTimeField(auto_now=True)      # track last modified
     is_active = models.BooleanField(default=True)
@@ -45,6 +45,12 @@ class Store(models.Model):
 
     def __str__(self):
         return f"{self.name} - ({self.code})"
+    
+    #on creation, set balance to budget
+    def save(self, *args, **kwargs):
+        if not self.pk:  # only set balance on creation
+            self.balance = self.budget
+        super().save(*args, **kwargs)
 
 
 class StoreBudgetHistory(models.Model):
