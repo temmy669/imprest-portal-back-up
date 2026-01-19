@@ -16,9 +16,6 @@ from .sap_auth_utils import fetch_sap_token
 import requests
 User = get_user_model()
 
-
-
-
 class StoreListView(APIView):
     serializer_class = StoreSerializer()
     """
@@ -213,10 +210,14 @@ class StoreBudgetView(APIView):
         if area_manager_id:
             queryset = Store.objects.filter(area_manager__id=area_manager_id).order_by('-created_at')
              
-        pagination = DynamicPageSizePagination()
-        paginated_stores = pagination.paginate_queryset(queryset, request)
+        paginator = DynamicPageSizePagination()
+        paginated_stores = paginator.paginate_queryset(queryset, request)
         serializer = StoreBudgetSerializer(paginated_stores, many=True)
-        return CustomResponse(True, "Store Budgets Retrieved Successfully", 200, serializer.data)
+        return CustomResponse(True, "Store Budgets Retrieved Successfully", 200, {"count": paginator.page.paginator.count,
+                                                                                "next": paginator.get_next_link(),
+                                                                                "previous": paginator.get_previous_link(),
+                                                                                "results": serializer.data,
+                                                                                })
     
     def post(self, request):
         """Creates a new store"""
@@ -233,10 +234,10 @@ class StoreBudgetView(APIView):
                 updated_by=request.user if request.user.is_authenticated else None
             )
 
-            # Initialize balance if budget > 0
-            if store.balance == 0 and store.budget > 0:
-                store.balance = store.budget
-                store.save(update_fields=['balance'])
+            # # Initialize balance if budget > 0
+            # if store.balance == 0 and store.budget > 0:
+            #     store.balance = store.budget
+            #     store.save(update_fields=['balance'])
 
             return CustomResponse(True, "Store added", data=serializer.data)
         return CustomResponse(False, serializer.errors, 400)

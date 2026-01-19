@@ -16,7 +16,7 @@ STATUS_CHOICES = [
 
 class Reimbursement(models.Model):
     requester = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reimbursements')
-    store = models.ForeignKey(Store, on_delete=models.CASCADE)
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='reimbursements')
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0'))
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     is_draft = models.BooleanField(default=True)

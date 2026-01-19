@@ -19,9 +19,10 @@ class DashboardView(APIView):
     permission_classes = [IsAuthenticated, ViewAnalytics]
 
     def _get_user_stores(self, user, store_param=None):
-        if store_param:  # User selects a particular store from dropdown
+        if store_param:
             try:
-                return Store.objects.filter(id=int(store_param))
+                store_ids = [int(s) for s in store_param.split(",")]
+                return Store.objects.filter(id__in=store_ids)
             except Exception:
                 return Store.objects.none()
 
@@ -29,10 +30,16 @@ class DashboardView(APIView):
 
         if role_name == "Restaurant Manager":
             return Store.objects.filter(id=user.store_id)
+
         if role_name == "Area Manager":
             return user.assigned_stores.all()
+        
+        if role_name == "Internal Control":
+            return Store.objects.filter(id__in=store_ids) if store_param else Store.objects.all()
 
-        return Store.objects.all()  # For admin or superusers
+
+        return Store.objects.all()
+
 
     def get(self, request):
         user = request.user
@@ -46,7 +53,7 @@ class DashboardView(APIView):
             month, year = now.month, now.year
 
         # Store filter (for Area Managers)
-        store_param = request.query_params.get("store")
+        store_param = request.query_params.get("store")  # e.g. "1,3,5"
 
         # Set date range for month
         start_month = timezone.make_aware(datetime(year, month, 1))

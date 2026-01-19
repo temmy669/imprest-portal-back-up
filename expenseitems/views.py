@@ -16,7 +16,7 @@ class ExpenseItemView(APIView):
     permission_classes = [IsAuthenticated, IsSuperUserOrReadOnly]
     
     def get(self, request):
-        items = ExpenseItem.objects.all()
+        items = ExpenseItem.objects.all().order_by('-created_at')
         
         #Search query
         search_query = request.query_params.get('search', None)
@@ -31,12 +31,13 @@ class ExpenseItemView(APIView):
         return CustomResponse(True, 
                               "Items Retrieved Successfully", 
                               200,
-                              {"results": serializer.data,
+                              {
                                "count": paginator.page.paginator.count,
                                "num_pages": paginator.page.paginator.num_pages,
                                "current_page": paginator.page.number,
                                "next": paginator.get_next_link(),
-                               "previous": paginator.get_previous_link()
+                               "previous": paginator.get_previous_link(),
+                               "results": serializer.data,
                               })
     
     
