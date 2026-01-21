@@ -8,7 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.db.models import Sum, F
 from django.db.models.functions import ExtractMonth
 from django.utils import timezone
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, time
 from users.auth import JWTAuthenticationFromCookie
 from decimal import Decimal
 from purchases.models import LimitConfig
@@ -67,13 +67,33 @@ class DashboardView(APIView):
 
         # --- Calculations ---
 
-        # Total reimbursements (monthly expenses)
-        start_week = now - timedelta(days=now.weekday())  # Monday
-        end_week = start_week + timedelta(days=6)        # Sunday
+        now = timezone.now()
+
+        # Wednesday = 2 (Mon=0, Tue=1, Wed=2)
+        WEEK_START_DAY = 2
+        WEEK_START_TIME = time(15, 0)  # 3:00 PM
+
+        # Find this week's Wednesday 3:00 PM
+        days_since_wednesday = (now.weekday() - WEEK_START_DAY) % 7
+        start_week = now - timedelta(days=days_since_wednesday)
+        start_week = start_week.replace(
+            hour=WEEK_START_TIME.hour,
+            minute=WEEK_START_TIME.minute,
+            second=0,
+            microsecond=0,
+        )
+
+        # If we're before Wednesday 3 PM, go back one week
+        if now < start_week:
+            start_week -= timedelta(days=7)
+
+        end_week = start_week + timedelta(days=7)
+
         weekly_expenses = (
             Reimbursement.objects.filter(
                 store__in=stores,
-                created_at__date__range=[start_week.date(), end_week.date()]
+                created_at__gte=start_week,
+                created_at__lt=end_week
             ).aggregate(total=Sum("total_amount"))["total"] or Decimal(0)
         )
 

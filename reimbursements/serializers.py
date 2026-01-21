@@ -98,14 +98,15 @@ class ReimbursementSerializer(serializers.ModelSerializer):
     items = ReimbursementItemSerializer(many=True)
     comments = ReimbursementCommentSerializer(many=True, required=False)
     requester = serializers.StringRelatedField(read_only=True)
+    balance = serializers.SerializerMethodField()
 
     class Meta:
         model = Reimbursement
         fields = [
             'id', 'status', 'items', 'comments', 'requester',
-            'internal_control_status', 'store', 'disbursement_status', 'bank', 'account'
+            'internal_control_status', 'store', 'disbursement_status', 'bank', 'account', 'balance',
         ]
-        read_only_fields = ['requester', 'disbursement_status']
+        read_only_fields = ['requester', 'disbursement_status', 'balance']
         
     def validate(self, attrs):
         request = self.context['request']
@@ -117,13 +118,13 @@ class ReimbursementSerializer(serializers.ModelSerializer):
         if not store or not store.budget:
             return attrs  # No budget configured → allow
 
-        # 🔹 Calculate incoming reimbursement total
+        #  Calculate incoming reimbursement total
         incoming_total = sum(
             Decimal(item['unit_price']) * item['quantity']
             for item in items
         )
 
-        # 🔹 Calculate current week boundaries (safe, timezone-aware)
+        #  Calculate current week boundaries (safe, timezone-aware)
         now = timezone.now()
         start_week = now - timezone.timedelta(days=now.weekday())
         start_week = start_week.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -152,6 +153,22 @@ class ReimbursementSerializer(serializers.ModelSerializer):
             })
 
         return attrs
+    
+    #get balance for the store this reimbursement belongs to
+    def get_balance(self, instance):
+        store = instance.store
+        if not store:
+            return None
+
+        approved_total = (
+            store.reimbursements
+            .filter(internal_control_status='approved')
+            .aggregate(total=Sum('total_amount'))
+            ['total']
+            or Decimal('0')
+        )
+        
+        return str(store.budget - approved_total)
 
 
     def to_representation(self, instance):

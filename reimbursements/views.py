@@ -72,6 +72,7 @@ class ReimbursementRequestView(APIView):
         start_date = request.query_params.get("start_date")
         end_date = request.query_params.get("end_date")
         status = request.query_params.get("status")
+        internal_control_status = request.query_params.get("internal_control_status")
         search = request.query_params.get("search")
         search_query = request.query_params.get("q", "").strip()
         region_id = request.query_params.get("region")
@@ -124,6 +125,9 @@ class ReimbursementRequestView(APIView):
 
         if status:
             queryset = queryset.filter(status=status)
+        
+        if internal_control_status:
+            queryset = queryset.filter(internal_control_status=internal_control_status)
             
             # status_filter = True
             # status_field

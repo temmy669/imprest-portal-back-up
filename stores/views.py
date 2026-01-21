@@ -190,6 +190,71 @@ class AssignStoresToUserView(APIView):
                 },
                 status=status.HTTP_404_NOT_FOUND
             )
+
+
+class DelistStoresFromUserView(APIView):
+    """
+    API endpoint for removing stores from a user (area manager).
+    """
+
+    def post(self, request, user_id):
+        """
+        Handles store delisting from a user.
+
+        Parameters:
+        - user_id: ID of the user being unassigned
+        - store_ids: List of store IDs to remove (in request body)
+        """
+        store_ids = request.data.get("store_ids", [])
+
+        try:
+            user = User.objects.get(pk=user_id)
+
+            # Get stores that are BOTH:
+            # - in the request
+            # - currently assigned to this user
+            stores = Store.objects.filter(
+                id__in=store_ids,
+                area_manager=user
+            )
+
+            if not stores.exists():
+                return Response(
+                    {
+                        "success": False,
+                        "error": "No valid stores found",
+                        "detail": "None of the selected stores are assigned to this user."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            store_ids_to_remove = stores.values_list("id", flat=True)
+
+            # Remove from user's assigned stores
+            user.assigned_stores.remove(*store_ids_to_remove)
+
+            # Clear area manager from stores
+            stores.update(area_manager=None)
+
+            return Response(
+                {
+                    "success": True,
+                    "message": "Stores delisted successfully",
+                    "delisted_stores": [store.code for store in stores]
+                },
+                status=status.HTTP_200_OK
+            )
+
+        except User.DoesNotExist:
+            return Response(
+                {
+                    "success": False,
+                    "error": "User not found",
+                    "detail": f"No user exists with ID {user_id}"
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+
             
 class ListAreaManagersByRegion(APIView):
     def get(self, request):
