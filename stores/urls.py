@@ -11,7 +11,7 @@ from .views import (
 
 urlpatterns = [
     path('regions', RegionListView.as_view(), name='list-regions'),
-    path('regions/int:pk/', RegionListView.as_view(), name='region-detail'),
+    path('regions/<int:pk>/', RegionListView.as_view(), name='region-detail'),
     path('region/<int:region_id>/', StoreByRegionView.as_view(), name= 'stores-by-region'),
     path('assign-stores/<int:user_id>/', AssignStoresToUserView.as_view(), name='assign-store'),
     path('delist-stores/<int:user_id>/', DelistStoresFromUserView.as_view(), name='delist-store'),
