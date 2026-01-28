@@ -95,22 +95,26 @@ class PurchaseRequestView(APIView):
         """
         Create a new purchase request
         """
-        serializer = PurchaseRequestSerializer(data=request.data, context={'request': request})
-        if serializer.is_valid():
-            # Calculate total amount
-            total_amount = sum(
-                item['unit_price'] * item['quantity']
-                for item in request.data.get('items', [])
-            )
+        try:
+            serializer = PurchaseRequestSerializer(data=request.data, context={'request': request})
+            if serializer.is_valid():
+                # Calculate total amount
+                total_amount = sum(
+                    item['unit_price'] * item['quantity']
+                    for item in request.data.get('items', [])
+                )
 
-            # Save the request
-            purchase_request = serializer.save(
-                requester=request.user,
-                total_amount=total_amount
-            )
+                # Save the request
+                purchase_request = serializer.save(
+                    requester=request.user,
+                    total_amount=total_amount
+                )
 
-            return CustomResponse(True, "Purchase Request Created Successfully", 201, serializer.data)
-        return CustomResponse(False, serializer.errors)
+                return CustomResponse(True, "Purchase Request Created Successfully", 201, serializer.data)
+            return CustomResponse(False, serializer.errors)
+        except Exception as err:
+            return CustomResponse(False, "Unable to create purchase request", 400, {"error":str(err)})
+            
     
     def put(self, request, pk):
         """
