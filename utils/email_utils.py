@@ -1,9 +1,13 @@
 from django.core.mail import send_mail
 from django.conf import settings
 from django.template.loader import render_to_string
+from django.forms import model_to_dict
 from django.utils.html import strip_tags
 from users.models import User
 from purchases.models import Comment
+import logging 
+
+logger = logging.getLogger(__name__)
 
 def send_approval_notification(purchase_request):
     """
@@ -48,72 +52,72 @@ def send_rejection_notification(purchase_request, comment):
     """
     Sends rejection notification with reason
     """
-    requester = purchase_request.requester
-    
-    items = purchase_request.items.all()
-    
-   
-    print("Comments Queryset:", comment)
-    print("Selected Comment:", comment)
-    
-    context = {
-        'request_id': f"PR-{purchase_request.id:04d}",
-        'requester_name': requester.get_full_name(),
-        'voucher_id': getattr(purchase_request, 'voucher_id'),
-        'rejector_name': purchase_request.area_manager.get_full_name(),
-        'rejection_reason': comment.text if comment else "No reason provided.",
-        'items': items, 
-        'rejection_date': purchase_request.area_manager_declined_at.strftime("%b %d, %Y %I:%M %p"),
-        'company_name': settings.COMPANY_NAME,
-        'store_name': purchase_request.store.name,
-        'total_amount': f"₦{purchase_request.total_amount:,.2f}",
-        'request_date': purchase_request.created_at.strftime("%b %d, %Y %I:%M %p"),
-        'status': purchase_request.get_status_display()
-    }
-    
-    html_message = render_to_string('pr_rejection.html', context)
-    plain_message = strip_tags(html_message)
-    
-    send_mail(
-        subject=f"Purchase Request Declined - {context['request_id']}",
-        message=plain_message,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        recipient_list=[purchase_request.requester.email],
-        html_message=html_message
-    )
+    try:
+        requester = purchase_request.requester
+        items = purchase_request.items.all()
+        area_manager = purchase_request.area_manager
+        context = {
+            'request_id': f"PR-{purchase_request.id:04d}",
+            'requester_name': requester.get_full_name(),
+            'voucher_id': getattr(purchase_request, 'voucher_id'),
+            'rejector_name': purchase_request.area_manager.get_full_name(),
+            'rejection_reason': comment.text if comment else "No reason provided.",
+            'items': items, 
+            'rejection_date': purchase_request.area_manager_declined_at.strftime("%b %d, %Y %I:%M %p"),
+            'company_name': settings.COMPANY_NAME,
+            'store_name': purchase_request.store.name,
+            'total_amount': f"₦{purchase_request.total_amount:,.2f}",
+            'request_date': purchase_request.created_at.strftime("%b %d, %Y %I:%M %p"),
+            'status': purchase_request.get_status_display()
+        }
+        
+        html_message = render_to_string('pr_rejection.html', context)
+        plain_message = strip_tags(html_message)
+        
+        send_mail(
+            subject=f"Purchase Request Declined - {context['request_id']}",
+            message=plain_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[purchase_request.requester.email],
+            html_message=html_message
+        )
+
+    except Exception as err:
+        logger.error(err)
+        raise
     
 def send_creation_notification(purchase_request):
     """
     Sends creation notification to requester with request details
     """
-    #get the store area manager for the purchase request
-    area_manager = purchase_request.store.area_manager
-    
-    context = {
-        'request_id': f"PR-{purchase_request.id:04d}",
-        'area_manager_name': area_manager.get_full_name(),
-        'store_name': purchase_request.store.name,
-        'store_code': purchase_request.store.code,
-        'total_amount': f"₦{purchase_request.total_amount:,.2f}",
-        'request_date': purchase_request.created_at.strftime("%b %d, %Y %I:%M %p"),
-        'status': purchase_request.get_status_display(),
-        'company_name': settings.COMPANY_NAME
-    }
-
-    html_message = render_to_string('pr_creation.html', context)
-    plain_message = strip_tags(html_message)
-    
-    send_mail(
-        
-        subject=f"Purchase Request Created - {context['request_id']}",
-        message=plain_message,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        #send email to area manager of request store
-         
-        recipient_list=[purchase_request.store.area_manager.email],
-        html_message=html_message
-    )
-    
+    try:
+        #get the store area manager for the purchase request
+        area_manager = purchase_request.area_manager if purchase_request.area_manager else None
+        if area_manager:
+            context = {
+                'request_id': f"PR-{purchase_request.id:04d}",
+                'area_manager_name': area_manager.get_full_name(),
+                'store_name': purchase_request.store.name,
+                'store_code': purchase_request.store.code,
+                'total_amount': f"₦{purchase_request.total_amount:,.2f}",
+                'request_date': purchase_request.created_at.strftime("%b %d, %Y %I:%M %p"),
+                'status': purchase_request.get_status_display(),
+                'company_name': settings.COMPANY_NAME
+            }
+          
+            html_message = render_to_string('pr_creation.html', context)
+            plain_message = strip_tags(html_message)
+            
+            send_mail(
+                subject=f"Purchase Request Created - {context['request_id']}",
+                message=plain_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[purchase_request.area_manager.email],
+                html_message=html_message
+            )
+    except Exception as err:
+        logger.error(err)
+        raise 
     
 def send_reimbursement_creation_notification(reimbursement):
     """
@@ -122,8 +126,6 @@ def send_reimbursement_creation_notification(reimbursement):
     
     #get the store area manager for the reimbursement request
     area_manager = reimbursement.store.area_manager
-    print("Area Manager Email:", area_manager.email)
-    
     context = {
         'request_id': f"PR-{reimbursement.id:04d}",
         'area_manager_name': area_manager.get_full_name(),
