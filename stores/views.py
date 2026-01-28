@@ -208,7 +208,7 @@ class DelistStoresFromUserView(APIView):
         store_ids = request.data.get("store_ids", [])
 
         try:
-            user = User.objects.get(pk=user_id)
+            user = User.objects.get(id=user_id)
 
             # Get stores that are BOTH:
             # - in the request
