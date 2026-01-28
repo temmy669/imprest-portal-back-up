@@ -621,16 +621,146 @@ class DeclineReimbursementItemView(APIView):
 class ExportReimbursement(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
     permission_classes = [IsAuthenticated, ViewReimbursementRequest]
+    
+    # -------------------------------
+    # Helpers
+    # -------------------------------
+    #Helper methods called by the export view
+    def get_queryset(self, user, start_date, end_date, status):
+        qs = Reimbursement.objects.all()
 
+        if user.role.name == "Area Manager":
+            return qs.filter(
+                store__in=user.assigned_stores.all(),
+                created_at__date__range=(start_date, end_date),
+                status__iexact=status,
+            )
+
+        if user.role.name == "Internal Control":
+            return qs.filter(
+                status="approved",
+                created_at__date__range=(start_date, end_date),
+                internal_control_status__iexact=status,
+            )
+
+        if user.role.name == "Treasurer":
+            return qs.filter(
+                internal_control_status="approved",
+                created_at__date__range=(start_date, end_date),
+                disbursement_status__iexact=status,
+            )
+
+        if user.role.name == "Restaurant Manager":
+            return qs.filter(
+                requester=user,
+                created_at__date__range=(start_date, end_date),
+                status__iexact=status,
+            )
+
+        return None
+
+    def export_internal_control(self, queryset, start_date, end_date):
+        from collections import defaultdict
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.title = "Internal Control"
+
+        expense_types = sorted({
+            item.item_name
+            for rr in queryset
+            for item in rr.items.all()
+        })
+
+        headers = ["Staff Name"] + expense_types + ["Total"]
+        sheet.append(headers)
+
+        data = defaultdict(lambda: defaultdict(float))
+
+        for rr in queryset:
+            name = f"{rr.requester.first_name} {rr.requester.last_name}"
+
+            for item in rr.items.all():
+                data[name][item.item_name] += item.item_total
+
+            data[name]["Total"] += rr.total_amount
+
+        for name, expenses in data.items():
+            row = [name] + [expenses.get(h, 0) for h in expense_types] + [expenses["Total"]]
+            sheet.append(row)
+
+        return self.build_response(
+            workbook,
+            f"IC_reimbursements_{start_date.date()}_{end_date.date()}.xlsx"
+        )
+
+    def export_treasury(self, queryset, start_date, end_date):
+        from collections import defaultdict
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.title = "Treasury"
+
+        headers = ["Store", "Region", "Total Amount"]
+        sheet.append(headers)
+
+        stores = defaultdict(lambda: {"region": "", "total": 0})
+
+        for rr in queryset:
+            store = rr.store.name
+            stores[store]["region"] = rr.store.region.name if rr.store.region else ""
+            stores[store]["total"] += rr.total_amount
+
+        for store, data in stores.items():
+            sheet.append([store, data["region"], data["total"]])
+
+        return self.build_response(
+            workbook,
+            f"Treasury_reimbursements_{start_date.date()}_{end_date.date()}.xlsx"
+        )
+
+
+    def export_default(self, queryset, user, start_date, end_date):
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+
+        headers = ["Request ID", "Requester", "Store", "Total", "Status", "Date"]
+        sheet.append(headers)
+
+        for rr in queryset:
+            sheet.append([
+                f"RR-{rr.id:04d}",
+                f"{rr.requester.first_name} {rr.requester.last_name}",
+                rr.store.name if rr.store else "",
+                rr.total_amount,
+                rr.status.capitalize(),
+                rr.created_at.strftime("%Y-%m-%d")
+            ])
+
+        return self.build_response(
+            workbook,
+            f"reimbursements_{start_date.date()}_{end_date.date()}.xlsx"
+        )
+
+
+    def build_response(self, workbook, filename):
+        response = HttpResponse(
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        workbook.save(response)
+        return response
+
+    #-------------------------------
+    # Main GET method for export
+    #-------------------------------    
+     
     def get(self, request):
         start_date = request.query_params.get("start_date")
         end_date = request.query_params.get("end_date")
         status = request.query_params.get("status")
+        template = request.query_params.get("template") # e.g., "internal_control", "treasury", etc.
 
         user = request.user
-        reimbursement = Reimbursement.objects.all()
 
-        # validate inputs
         if not start_date or not end_date or not status:
             return CustomResponse(False, "start_date, end_date and status are required", 400)
 
@@ -643,128 +773,18 @@ class ExportReimbursement(APIView):
         if start_date > end_date:
             return CustomResponse(False, "start_date cannot be after end_date", 400)
 
-        # role-based queryset
-        if user.role.name == "Area Manager":
-            queryset = reimbursement.filter(
-                store__in=user.assigned_stores.all(),
-                created_at__date__gte=start_date.date(),
-                created_at__date__lte=end_date.date(),
-                status__iexact=status,
-            )
-            headers = ["Request ID", "Requester", "Store", "Total Amount", "Status", "Date Created"]
-            file_name = f"AM_reimbursement_requests_{start_date.date()}_{end_date.date()}.xlsx"
-
-        elif user.role.name == "Internal Control":
-            queryset = reimbursement.filter(
-                status="approved",
-                created_at__date__gte=start_date.date(),
-                created_at__date__lte=end_date.date(),
-                internal_control_status__iexact=status,
-            )
-            headers = ["Request ID", "Requester", "Store", "Total Amount", "Status", "Date Created"]
-            file_name = f"IC_reimbursement_requests_{start_date.date()}_{end_date.date()}.xlsx"
-
-        elif user.role.name == "Treasurer":
-            queryset = reimbursement.filter(
-                internal_control_status="approved",
-                created_at__date__gte=start_date.date(),
-                created_at__date__lte=end_date.date(),
-                disbursement_status__iexact=status,
-            )
-            headers = [
-                "Request ID",
-                "Requester",
-                "Region",
-                "Store",
-                "Area Manager",
-                "Total Amount",
-                "Status",
-                "Date Created",
-                "Bank Name",
-                "Account Name",
-            ]
-            file_name = f"Treasury_reimbursement_requests_{start_date.date()}_{end_date.date()}.xlsx"
-
-        elif user.role.name == "Restaurant Manager":
-            queryset = reimbursement.filter(
-                requester=user,
-                created_at__date__gte=start_date.date(),
-                created_at__date__lte=end_date.date(),
-                status__iexact=status,
-            )
-            headers = ["Request ID", "Store", "Total Amount", "Status", "Date Created"]
-            file_name = f"RM_reimbursement_requests_{start_date.date()}_{end_date.date()}.xlsx"
-
-        else:
+        queryset = self.get_queryset(user, start_date, end_date, status)
+        if queryset is None:
             return CustomResponse(False, "You are not allowed to export reimbursements", 403)
 
-        # workbook
-        workbook = openpyxl.Workbook()
-        sheet = workbook.active
-        sheet.title = f"RRs {start_date:%d-%m} to {end_date:%d-%m}"
-        sheet.append(headers)
+        if template == "internal_control":
+            return self.export_internal_control(queryset, start_date, end_date)
 
-        # rows
-        for rr in queryset:
-            if user.role.name == "Internal Control":
-                row = [
-                    f"RR-{rr.id:04d}",
-                    f"{rr.requester.first_name} {rr.requester.last_name}",
-                    rr.store.name if rr.store else "",
-                    rr.total_amount, 
-                    rr.internal_control_status.capitalize(),
-                    rr.created_at.strftime("%Y-%m-%d")
-                ]
+        if template == "treasury":
+            return self.export_treasury(queryset, start_date, end_date)
 
-            elif user.role.name == "Treasurer":
-                row = [
-                    f"RR-{rr.id:04d}",
-                    f"{rr.requester.first_name} {rr.requester.last_name}",
-                    rr.store.region.name if rr.store and rr.store.region else "",
-                    rr.store.name if rr.store else "",
-                    f"{rr.store.area_manager.first_name} {rr.store.area_manager.last_name}"
-                    if rr.store and rr.store.area_manager
-                    else "",
-                    rr.total_amount,
-                    rr.disbursement_status.capitalize(),
-                    rr.created_at.strftime("%Y-%m-%d"),
-                    rr.bank.bank_name if rr.bank else "",
-                    rr.account.account_name if rr.account else "",
-                ]
+        return self.export_default(queryset, user, start_date, end_date)
 
-            elif user.role.name == "Area Manager":
-                row = [
-                    f"RR-{rr.id:04d}",
-                    f"{rr.requester.first_name} {rr.requester.last_name}",
-                    rr.store.name if rr.store else "",
-                    rr.total_amount,
-                    rr.status.capitalize(),
-                    rr.created_at.strftime("%Y-%m-%d"),
-                ]
-
-            else:  # Restaurant Manager
-                row = [
-                    f"RR-{rr.id:04d}",
-                    rr.store.name if rr.store else "",
-                    rr.total_amount,
-                    rr.status.capitalize(),
-                    rr.created_at.strftime("%Y-%m-%d"),
-                ]
-
-            sheet.append(row)
-
-        # auto column widths
-        for col in sheet.columns:
-            max_length = max((len(str(cell.value)) for cell in col if cell.value), default=0)
-            sheet.column_dimensions[col[0].column_letter].width = max_length + 2
-
-        # build response
-        response = HttpResponse(
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-        response["Content-Disposition"] = f'attachment; filename="{file_name}"'
-        workbook.save(response)
-        return response
 
 
 class DisbursemntView(APIView):
@@ -827,4 +847,4 @@ class BulkDisbursementView(APIView):
         
         return CustomResponse(True, f"{updated_count} reimbursement(s) disbursed successfully", 200)
     
-        
+    

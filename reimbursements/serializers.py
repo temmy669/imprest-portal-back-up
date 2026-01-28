@@ -104,7 +104,7 @@ class ReimbursementSerializer(serializers.ModelSerializer):
         model = Reimbursement
         fields = [
             'id', 'status', 'items', 'comments', 'requester',
-            'internal_control_status', 'store', 'disbursement_status', 'bank', 'account', 'balance',
+            'internal_control_status', 'store', 'disbursement_status', 'bank', 'account', 'balance', 'voucher_id'
         ]
         read_only_fields = ['requester', 'disbursement_status', 'balance']
         

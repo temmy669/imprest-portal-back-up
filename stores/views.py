@@ -236,13 +236,17 @@ class DelistStoresFromUserView(APIView):
             # Clear area manager from stores
             stores.update(area_manager=None)
 
-            return Response(
+            return CustomResponse(
+                
+                True,
+                "Stores delisted successfully",
+                200,
                 {
                     "success": True,
                     "message": "Stores delisted successfully",
                     "delisted_stores": [store.code for store in stores]
                 },
-                status=status.HTTP_200_OK
+                
             )
 
         except User.DoesNotExist:
