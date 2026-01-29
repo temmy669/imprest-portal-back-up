@@ -766,7 +766,7 @@ class ExportReimbursement(APIView):
         start_date = request.query_params.get("start_date")
         end_date = request.query_params.get("end_date")
         status = request.query_params.get("status")
-        template = request.query_params.get("template") # e.g., "internal_control", "treasury", etc.
+        # template = request.query_params.get("template") # e.g., "internal_control", "treasury", etc.
 
         user = request.user
 
@@ -786,13 +786,14 @@ class ExportReimbursement(APIView):
         if queryset is None:
             return CustomResponse(False, "You are not allowed to export reimbursements", 403)
 
-        if template == "internal_control":
+        if user.role.name == "Internal Control":
             return self.export_internal_control(queryset, start_date, end_date)
 
-        if template == "treasury":
+        if user.role.name == "Treasurer":
             return self.export_treasury(queryset, start_date, end_date)
 
         return self.export_default(queryset, user, start_date, end_date)
+
 
 
 
