@@ -9,6 +9,7 @@ from helpers.exceptions import CustomValidationException
 from .models import ExpenseItem
 from .serializers import ItemSerializer
 from utils.pagination import DynamicPageSizePagination
+from rest_framework.exceptions import ValidationError
 # Create your views here.
 
 class ExpenseItemView(APIView):
@@ -16,30 +17,54 @@ class ExpenseItemView(APIView):
     permission_classes = [IsAuthenticated, IsSuperUserOrReadOnly]
     
     def get(self, request):
-        items = ExpenseItem.objects.all().order_by('-created_at')
+        try:
+            param = self.request.query_params.get("paginated", 0)
+            items = ExpenseItem.objects.all().order_by('-created_at')
+            if param and param not in ["true", "false"]:
+                raise ValidationError("Invalid query param. value must be either 'true' or 'false'")
+            
+            #Search query
+            search_query = request.query_params.get('search', None)
+            if search_query:
+                items = items.filter(name__icontains=search_query)
+            
+            #Pginate results
+            if not param or param == 'true':
+                paginator = DynamicPageSizePagination()
+                items = paginator.paginate_queryset(items, request)
+                serializer = ItemSerializer(items, many=True)
+                return CustomResponse(True, 
+                                    "Items Retrieved Successfully", 
+                                    200,
+                                    {
+                                    "count": paginator.page.paginator.count,
+                                    "num_pages": paginator.page.paginator.num_pages,
+                                    "current_page": paginator.page.number,
+                                    "next": paginator.get_next_link(),
+                                    "previous": paginator.get_previous_link(),
+                                    "results": serializer.data,
+                                    })
+            else:
+                print("items", items)
+                all_items = ItemSerializer(items, many=True).data
+                print("items", items)
+                return CustomResponse(
+                    True,
+                    "Items retrieved Successfully",
+                    200,
+                    all_items
+                )
+        except Exception as err:
+            return CustomResponse(
+                False,
+                "Unable to retrieve expense items",
+                400,
+                {
+                    "error":str(err)
+                }
+            )
+
         
-        #Search query
-        search_query = request.query_params.get('search', None)
-        if search_query:
-            items = items.filter(name__icontains=search_query)
-        
-        #Pginate results
-        paginator = DynamicPageSizePagination()
-        
-        items = paginator.paginate_queryset(items, request)
-        serializer = ItemSerializer(items, many=True)
-        return CustomResponse(True, 
-                              "Items Retrieved Successfully", 
-                              200,
-                              {
-                               "count": paginator.page.paginator.count,
-                               "num_pages": paginator.page.paginator.num_pages,
-                               "current_page": paginator.page.number,
-                               "next": paginator.get_next_link(),
-                               "previous": paginator.get_previous_link(),
-                               "results": serializer.data,
-                              })
-    
     
     def post(self, request):
         """Creates a new Expense Item"""
