@@ -176,83 +176,92 @@ class ReimbursementRequestView(APIView):
     def post(self, request):
         
         # Step 1: Create reimbursement (draft by default)
-        serializer = ReimbursementSerializer(data=request.data, context={'request': request})
-        if not serializer.is_valid():
-            errors = serializer.errors
+        try:
+            serializer = ReimbursementSerializer(data=request.data, context={'request': request})
+            if not serializer.is_valid():
+                errors = serializer.errors
 
-            # Try to extract a meaningful message
-            message = "Invalid data"
+                # Try to extract a meaningful message
+                message = "Invalid data"
 
-            if isinstance(errors, dict):
-                if 'detail' in errors:
-                    message = errors['detail']
-                else:
-                    first_key = next(iter(errors))
-                    first_error = errors[first_key]
-
-                    if isinstance(first_error, list):
-                        message = first_error[0]
+                if isinstance(errors, dict):
+                    if 'detail' in errors:
+                        message = errors['detail']
                     else:
-                        message = first_error
+                        first_key = next(iter(errors))
+                        first_error = errors[first_key]
 
+                        if isinstance(first_error, list):
+                            message = first_error[0]
+                        else:
+                            message = first_error
+
+
+                return CustomResponse(
+                    False,
+                    message,
+                    400,
+                    None
+                )
+            
+            reimbursement = serializer.save(requester=request.user)
+
+            # Update the related purchase request with the newly created reimbursement id
+            purchase_request_refs = set()
+
+            for item in reimbursement.items.all():
+                ref = (item.purchase_request_ref or "").strip()
+                match = re.match(r'^PR-0*(\d+)', ref)  # handles cases like PR-0015 or PR-0015-12000.00
+                if match:
+                    pr_id = int(match.group(1))  # convert to int (15)
+                    print(pr_id)
+                    purchase_request_refs.add(pr_id)
+
+            if purchase_request_refs:
+                purchase_requests = PurchaseRequest.objects.filter(id__in=purchase_request_refs)
+                purchase_requests.update(reimbursement=reimbursement)
+            
+        # Sync receipt_validated from purchase request items to reimbursement items
+            for item in reimbursement.items.all():
+                pr_item_ref = (item.purchase_request_ref or "").strip()
+                match = re.match(r'^PR-0*(\d+)', pr_item_ref)
+
+                if not match:
+                    continue
+
+                pr_id = int(match.group(1))
+
+                pr_item = (
+                    PurchaseRequestItem.objects
+                    .filter(
+                        request_id=pr_id,
+                    )
+                    .order_by('-id')
+                    .first()
+                )
+
+                if not pr_item:
+                    continue
+
+                item.receipt_validated = pr_item.receipt_validated
+                item.save(update_fields=['receipt_validated'])
 
             return CustomResponse(
+                True,
+                "Reimbursement submitted for approval",
+                201,
+                ReimbursementSerializer(reimbursement).data
+            )
+        
+        except Exception as err:
+            return CustomResponse(
                 False,
-                message,
+                "Unable to create reimbursement",
                 400,
-                None
+                {
+                    "error":str(err)
+                }
             )
-        
-        reimbursement = serializer.save(requester=request.user)
-
-        # Update the related purchase request with the newly created reimbursement id
-        purchase_request_refs = set()
-
-        for item in reimbursement.items.all():
-            ref = (item.purchase_request_ref or "").strip()
-            match = re.match(r'^PR-0*(\d+)', ref)  # handles cases like PR-0015 or PR-0015-12000.00
-            if match:
-                pr_id = int(match.group(1))  # convert to int (15)
-                print(pr_id)
-                purchase_request_refs.add(pr_id)
-
-        if purchase_request_refs:
-            purchase_requests = PurchaseRequest.objects.filter(id__in=purchase_request_refs)
-            purchase_requests.update(reimbursement=reimbursement)
-        
-       # Sync receipt_validated from purchase request items to reimbursement items
-        for item in reimbursement.items.all():
-            pr_item_ref = (item.purchase_request_ref or "").strip()
-            match = re.match(r'^PR-0*(\d+)', pr_item_ref)
-
-            if not match:
-                continue
-
-            pr_id = int(match.group(1))
-
-            pr_item = (
-                PurchaseRequestItem.objects
-                .filter(
-                    request_id=pr_id,
-                )
-                .order_by('-id')
-                .first()
-            )
-
-            if not pr_item:
-                continue
-
-            item.receipt_validated = pr_item.receipt_validated
-            item.save(update_fields=['receipt_validated'])
-
-        
-        
-        return CustomResponse(
-            True,
-            "Reimbursement submitted for approval",
-            201,
-            ReimbursementSerializer(reimbursement).data
-        )
         
         
 

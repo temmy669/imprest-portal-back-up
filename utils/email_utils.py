@@ -123,32 +123,39 @@ def send_reimbursement_creation_notification(reimbursement):
     """
     Sends creation notification to area manager with request details
     """
-    
-    #get the store area manager for the reimbursement request
-    area_manager = reimbursement.store.area_manager
-    context = {
-        'request_id': f"PR-{reimbursement.id:04d}",
-        'area_manager_name': area_manager.get_full_name(),
-        'store_name': reimbursement.store.name,
-        'store_code': reimbursement.store.code,
-        'total_amount': f"₦{reimbursement.total_amount:,.2f}",
-        'request_date': reimbursement.created_at.strftime("%b %d, %Y %I:%M %p"),
-        'status': reimbursement.get_status_display(),
-        'company_name': settings.COMPANY_NAME
-    }
+    try:
+        #get the store area manager for the reimbursement request
+        area_manager = reimbursement.area_manager
+        print("area manager", area_manager)
 
-    html_message = render_to_string('rr_creation.html', context)
-    plain_message = strip_tags(html_message)
-    
-    send_mail(
-        subject=f"Reimbursement Request Created - {context['request_id']}",
-        message=plain_message,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        #send email to area manager of request store
-         
-        recipient_list=[reimbursement.store.area_manager.email],
-        html_message=html_message
-    )
+        if not area_manager: return
+        
+        context = {
+            'request_id': f"PR-{reimbursement.id:04d}",
+            'area_manager_name': area_manager.get_full_name(),
+            'store_name': reimbursement.store.name,
+            'store_code': reimbursement.store.code,
+            'total_amount': f"₦{reimbursement.total_amount:,.2f}",
+            'request_date': reimbursement.created_at.strftime("%b %d, %Y %I:%M %p"),
+            'status': reimbursement.get_status_display(),
+            'company_name': settings.COMPANY_NAME
+        }
+
+        html_message = render_to_string('rr_creation.html', context)
+        plain_message = strip_tags(html_message)
+        
+        send_mail(
+            subject=f"Reimbursement Request Created - {context['request_id']}",
+            message=plain_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            #send email to area manager of request store
+            
+            recipient_list=[area_manager.email],
+            html_message=html_message
+        )
+    except Exception as err:
+        logger.error(err)
+        raise
     
 def send_reimbursement_approval_notification(reimbursement, user):
     """
