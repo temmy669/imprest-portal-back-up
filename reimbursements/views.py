@@ -683,7 +683,7 @@ class ExportReimbursement(APIView):
         headers = ["Staff Name"] + expense_types + ["Total"]
         sheet.append(headers)
 
-        data = defaultdict(lambda: defaultdict(float))
+        data = defaultdict(lambda: defaultdict(Decimal))
 
         for rr in queryset:
             name = f"{rr.requester.first_name} {rr.requester.last_name}"
