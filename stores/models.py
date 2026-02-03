@@ -1,15 +1,16 @@
+import logging
 from django.db import models
 from django.utils import timezone
 from django.utils.functional import cached_property
+from rest_framework.exceptions import ValidationError
 from decimal import Decimal
 
+logger = logging.getLogger(__name__)
 
 class Region(models.Model):
     name = models.CharField(max_length=100, unique=True)
-    
     def __str__(self):
         return self.name
-
 
 class Store(models.Model):
     name = models.CharField(max_length=100)
@@ -49,15 +50,47 @@ class Store(models.Model):
         super().save(*args, **kwargs)
 
     @cached_property
-    def store_balance(self):
+    def balance(self):
         """Get the entire balance of the store."""
-        pass
-
+        expenses = self.expenses.all()
+        approved_expense = expenses.filter(reimbursement__status="approved")
+    
     @cached_property
     def weekly_balance(self, week_number):
         """Get the balance for the specified week. """
         pass
 
+    def allocate(self, amount):
+        try:
+            # Check that amount is provided.
+            if not amount:
+                raise ValidationError("Allocation amount must be provided.")
+            
+            # Invalidate previous allocations
+            self.allocations.update(is_current=False)
+
+            # Create New allocation
+            allocation = Allocation.objects.create(
+                store=self,
+                amount=amount,
+                is_current=True
+            )
+            return allocation
+        except Exception as err:
+            logger.error(err)
+            raise
+
+class Allocation(models.Model):
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="allocations")
+    amount = models.FloatField()
+    date = models.DateTimeField(auto_now_add=True)
+    is_current = models.BooleanField(default=False)
+
+class Transaction(models.Model):
+    allocation = models.ForeignKey(Allocation, related_name='transactions')
+    approved_expense = models.FloatField(default=0.0)
+    balance = models.FloatField(default=models.F("amount"))
+    date = models.DateTimeField(auto_now_add=True)
 
 class StoreBudgetHistory(models.Model):
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="budget_history")
