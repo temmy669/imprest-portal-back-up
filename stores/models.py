@@ -54,8 +54,8 @@ class Store(models.Model):
         """Get the entire balance of the store."""
         approved_expenses = self.reimbursements.filter(internal_control_status='approved')
         total_approved = approved_expenses.aggregate(total=models.Sum('total_amount'))['total']
-        remaining_balance = self.balance - total_approved
-        return str(self.budget - approved_total)
+        remaining_balance = (self.balance - total_approved) if total_approved else self.balance
+        return remaining_balance
     
     @cached_property
     def weekly_balance(self, week_number):
