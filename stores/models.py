@@ -65,6 +65,17 @@ class Store(models.Model):
         iso_calendar = today.isocalendar()
         return iso_calendar[1]
     
+    def can_raise_expense(self, amount):
+        """Check if a user can raise expense. 
+        A user can only raise expense if the store balance is greater than or equal to 
+        the intended expense amount.
+        """
+        current_allocation = self.allocations.filter(is_current=True).last()
+        print("current allocation", current_allocation)
+        if current_allocation and current_allocation.balance >= amount:
+            return True
+        return False
+    
     def allocate(self, amount):
         try:
             # Check that amount is provided.
