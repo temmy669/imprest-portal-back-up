@@ -60,7 +60,7 @@ class Store(models.Model):
     @cached_property
     def weekly_balance(self, week_number):
         """Get the balance for the specified week. """
-        pass
+        
 
     def allocate(self, amount):
         try:
@@ -72,11 +72,8 @@ class Store(models.Model):
             self.allocations.update(is_current=False)
 
             # Create New allocation
-            allocation = Allocation.objects.create(
-                store=self,
-                amount=amount,
-                is_current=True
-            )
+            allocation = Allocation.objects.create(store=self, amount=amount, is_current=True
+                                                   )
             return allocation
         except Exception as err:
             logger.error(err)
@@ -86,6 +83,7 @@ class Allocation(models.Model):
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="allocations")
     amount = models.FloatField()
     date = models.DateTimeField(auto_now_add=True)
+    week = models.PositiveSmallIntegerField()
     is_current = models.BooleanField(default=False)
 
 class Transaction(models.Model):
@@ -93,6 +91,7 @@ class Transaction(models.Model):
     approved_expense = models.FloatField(default=0.0)
     balance = models.FloatField(default=models.F("amount"))
     date = models.DateTimeField(auto_now_add=True)
+
 
 class StoreBudgetHistory(models.Model):
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="budget_history")

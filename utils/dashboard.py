@@ -22,6 +22,7 @@ class DashboardView(APIView):
     # Helpers
     # -------------------------------
     def _get_user_stores(self, user, store_param=None):
+
         if store_param:
             try:
                 store_ids = [int(s) for s in store_param.split(",")]
@@ -30,6 +31,7 @@ class DashboardView(APIView):
                 return Store.objects.none()
 
         role_name = getattr(getattr(user, "role", None), "name", "").strip()
+
         if role_name == "Restaurant Manager":
             return Store.objects.filter(id=user.store_id)
         if role_name == "Area Manager":
@@ -37,12 +39,21 @@ class DashboardView(APIView):
         if role_name == "Internal Control":
             return Store.objects.all()
         return Store.objects.all()
+    
+    def _get_current_week(self):
+        """A method to get the current week. """
+        today = datetime.date.today()
+        iso_calendar = today.isocalendar()
+        current_week_number = iso_calendar[1]
+        return current_week_number
+        
 
-    def _get_period_range(self, year, month, period):
-        """Return start and end datetime of a period (week) in a month"""
-        first_day = datetime(year, month, 1)
+    def _get_period_range(self, year, month, week_day=None):
+        """Return start and end datetime of the given period (week) in a month. """
+        day = 1
+        first_day = datetime(year, month, day)
         first_monday = first_day + timedelta(days=(7 - first_day.weekday()) % 7)
-        start = first_monday + timedelta(weeks=period - 1)
+        start = first_monday + timedelta(weeks=week_day - 1)
         end = start + timedelta(days=6)
         # Trim end if it passes month
         last_day_of_month = datetime(year, month + 1, 1) - timedelta(days=1) if month != 12 else datetime(year, month, 31)
@@ -51,7 +62,8 @@ class DashboardView(APIView):
         return timezone.make_aware(start), timezone.make_aware(end)
 
     def _get_available_periods(self, stores, year, month):
-        """Return list of periods with start/end dates and open/closed status"""
+        """Return list of periods with start/end dates and open/closed status. """
+
         periods = []
         first_day = datetime(year, month, 1)
         first_monday = first_day + timedelta(days=(7 - first_day.weekday()) % 7)
@@ -62,21 +74,18 @@ class DashboardView(APIView):
             current_end = current_start + timedelta(days=6)
             last_day_of_month = datetime(year, month + 1, 1) - timedelta(days=1) if month != 12 else datetime(year, month, 31)
             if current_end > last_day_of_month:
-                current_end = last_day_of_month
-
+                current_end = last_day_of_month 
             reimbursements = Reimbursement.objects.filter(
                 store__in=stores,
                 created_at__range=(timezone.make_aware(current_start), timezone.make_aware(current_end))
             )
             period_closed = not reimbursements.filter(disbursement_status="pending").exists()
-
             periods.append({
                 "period": period_number,
                 "start": current_start.date().isoformat(),
                 "end": current_end.date().isoformat(),
                 "status": "closed" if period_closed else "open"
             })
-
             current_start = current_start + timedelta(days=7)
             period_number += 1
 
@@ -91,9 +100,12 @@ class DashboardView(APIView):
 
         # ---- Parse filters ----
         try:
+            current_week = self._get_current_week()
+            
             month = int(request.query_params.get("month", now.month))
             year = int(request.query_params.get("year", now.year))
-            period = int(request.query_params.get("period", 1))
+            period = int(request.query_params.get("period", current_week))
+
         except Exception:
             month, year, period = now.month, now.year, 1
 
@@ -104,7 +116,9 @@ class DashboardView(APIView):
         period_start, period_end = self._get_period_range(year, month, period)
 
         # ---- Total Imprest (Store Budget) ----
-        total_imprest = stores.aggregate(total=Sum("budget"))["total"] or Decimal(0)
+        total_imprest = stores.filter(date__range=(period_end, period_end)).aggregate(total=Sum("budget"))["total"] or Decimal(0)
+
+        # WHAT YOU NEED IS THE TOTAL WEEKLY IMPRESS
 
         # ---- Weekly Expenses (pending only) ----
         weekly_expenses = (
