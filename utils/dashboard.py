@@ -64,7 +64,7 @@ class DashboardView(APIView):
         last_day_of_month = datetime(year, month + 1, 1) - timedelta(days=1) if month != 12 else datetime(year, month, 31)
         if end > last_day_of_month:
             end = last_day_of_month
-            
+
         return timezone.make_aware(start), timezone.make_aware(end)
 
     def _get_available_periods(self, stores, year, month):
@@ -85,6 +85,7 @@ class DashboardView(APIView):
                 store__in=stores,
                 created_at__range=(timezone.make_aware(current_start), timezone.make_aware(current_end))
             )
+            # Check if all reimbursement requests have been disbursed.
             period_closed = not reimbursements.filter(disbursement_status="pending").exists()
             periods.append({
                 "period": period_number,
@@ -106,6 +107,7 @@ class DashboardView(APIView):
 
         # ---- Parse filters ----
         try:
+            
             current_week = self._get_current_week()
 
             month = int(request.query_params.get("month", now.month))
