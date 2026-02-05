@@ -124,9 +124,11 @@ class DashboardView(APIView):
         period_start, period_end = self._get_period_range(year, month, period)
 
         # ---- Total Imprest (Store Budget) ----
-        total_imprest = stores.filter(date__range=(period_end, period_end)).aggregate(total=Sum("budget"))["total"] or Decimal(0)
+        total_imprest = stores.aggregate(total=Sum("budget"))["total"] or Decimal(0)
 
         # WHAT YOU NEED IS THE TOTAL WEEKLY IMPRESS
+        allocations_for_specified_week = stores.allocations.filter(date__week=current_week) if not period else stores.allocations.filter(date__week=period)
+        total_weekly_allocation = allocations_for_specified_week.aggregate(total=Sum("amount"))["total"]
 
         # ---- Weekly Expenses (pending only) ----
         weekly_expenses = (
@@ -137,7 +139,7 @@ class DashboardView(APIView):
             ).aggregate(total=Sum("total_amount"))["total"] or Decimal(0)
         )
 
-        weekly_balance = total_imprest - weekly_expenses
+        weekly_balance = total_weekly_allocation - weekly_expenses
 
         # ---- Period status ----
         period_closed = not Reimbursement.objects.filter(
@@ -194,6 +196,7 @@ class DashboardView(APIView):
                 "period_status": "closed" if period_closed else "open",
                 "weekly_expenses": float(weekly_expenses),
                 "weekly_balance": float(weekly_balance),
+                "weekly_impress":float(total_weekly_allocation),
                 "total_imprest": float(total_imprest),
                 "top_monthly_purchases": top_monthly_purchases,
                 "line_chart_data": line_chart_data,

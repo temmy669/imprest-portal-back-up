@@ -1,6 +1,7 @@
 import logging
 from django.db import models
 from django.utils import timezone
+form datetime import datetime
 from django.utils.functional import cached_property
 from rest_framework.exceptions import ValidationError
 from decimal import Decimal
@@ -57,11 +58,13 @@ class Store(models.Model):
         remaining_balance = (self.balance - total_approved) if total_approved else self.balance
         return remaining_balance
     
-    @cached_property
-    def weekly_balance(self, week_number):
-        """Get the balance for the specified week. """
-        
-
+   
+    def _get_current_week(self):
+        """Get the number of the current week. """
+        today = datetime.date.today()
+        iso_calendar = today.isocalendar()
+        return iso_calendar[1]
+    
     def allocate(self, amount):
         try:
             # Check that amount is provided.
@@ -70,11 +73,13 @@ class Store(models.Model):
             
             # Invalidate previous allocations
             self.allocations.update(is_current=False)
-
             # Create New allocation
-            allocation = Allocation.objects.create(store=self, amount=amount, is_current=True
-                                                   )
+            current_week = self._get_current_week()
+            allocation = Allocation.objects.create(store=self, amount=amount, 
+                week=current_week, is_current=True)
+            
             return allocation
+        
         except Exception as err:
             logger.error(err)
             raise
