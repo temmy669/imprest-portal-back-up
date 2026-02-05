@@ -42,9 +42,10 @@ class DashboardView(APIView):
     
     def _get_current_week(self):
         """A method to get the current week. """
-        today = datetime.date.today()
+        today = timezone.now().date()
         iso_calendar = today.isocalendar()
         current_week_number = iso_calendar[1]
+        print("Current week number ==> ", current_week_number)
         return current_week_number
         
 
@@ -101,7 +102,7 @@ class DashboardView(APIView):
         # ---- Parse filters ----
         try:
             current_week = self._get_current_week()
-            
+
             month = int(request.query_params.get("month", now.month))
             year = int(request.query_params.get("year", now.year))
             period = int(request.query_params.get("period", current_week))
