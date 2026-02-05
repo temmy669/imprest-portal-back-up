@@ -49,22 +49,27 @@ class DashboardView(APIView):
         return current_week_number
         
 
-    def _get_period_range(self, year, month, week_day=None):
-        """Return start and end datetime of the given period (week) in a month. """
+    def _get_period_range(self, year, month, week_number=None):
+        """Return start and end datetime of the given period (week) in a month. 
+        :week_number: refers to the number of the selected week.
+        - this defaults to the current week.
+        """
         day = 1
         first_day = datetime(year, month, day)
         first_monday = first_day + timedelta(days=(7 - first_day.weekday()) % 7)
-        start = first_monday + timedelta(weeks=week_day - 1)
+        start = first_monday + timedelta(weeks=week_number - 1)
         end = start + timedelta(days=6)
+
         # Trim end if it passes month
         last_day_of_month = datetime(year, month + 1, 1) - timedelta(days=1) if month != 12 else datetime(year, month, 31)
         if end > last_day_of_month:
             end = last_day_of_month
+            
         return timezone.make_aware(start), timezone.make_aware(end)
 
     def _get_available_periods(self, stores, year, month):
-        """Return list of periods with start/end dates and open/closed status. """
-
+        """Return list of periods with start/end dates and open/closed status. 
+        """
         periods = []
         first_day = datetime(year, month, 1)
         first_monday = first_day + timedelta(days=(7 - first_day.weekday()) % 7)
