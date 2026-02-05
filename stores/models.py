@@ -83,11 +83,17 @@ class Store(models.Model):
                 raise ValidationError("Allocation amount must be provided.")
             
             # Invalidate previous allocations
-            self.allocations.update(is_current=False)
+            allocations = self.allocations.all()
+            allocations.update(is_current=False)
+            last_allocation = allocations.last()
+            
             # Create New allocation
+            # get the current week number
             current_week = self._get_current_week()
             allocation = Allocation.objects.create(store=self, amount=amount, 
                 week=current_week, is_current=True)
+            allocation.balance = last_allocation.balance + amount
+            allocation.save()
             
             return allocation
         
@@ -98,16 +104,10 @@ class Store(models.Model):
 class Allocation(models.Model):
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="allocations")
     amount = models.FloatField()
+    balance = models.FloatField(default=0)
     date = models.DateTimeField(auto_now_add=True)
-    week = models.PositiveSmallIntegerField()
+    week = models.PositiveSmallIntegerField(blank=True, null=True)
     is_current = models.BooleanField(default=False)
-
-class Transaction(models.Model):
-    allocation = models.ForeignKey(Allocation, related_name='transactions')
-    approved_expense = models.FloatField(default=0.0)
-    balance = models.FloatField(default=models.F("amount"))
-    date = models.DateTimeField(auto_now_add=True)
-
 
 class StoreBudgetHistory(models.Model):
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="budget_history")
