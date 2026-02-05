@@ -1,7 +1,7 @@
 import logging
 from django.db import models
 from django.utils import timezone
-form datetime import datetime
+from datetime import datetime
 from django.utils.functional import cached_property
 from rest_framework.exceptions import ValidationError
 from decimal import Decimal
@@ -86,7 +86,7 @@ class Store(models.Model):
             allocations = self.allocations.all()
             allocations.update(is_current=False)
             last_allocation = allocations.last()
-            
+
             # Create New allocation
             # get the current week number
             current_week = self._get_current_week()
