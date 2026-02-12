@@ -14,9 +14,13 @@ class BYD:
             username = "adebola"
             auth_string = f"{username}:{password}"
             auth_header = f"Basic {base64.b64encode(auth_string.encode('utf-8')).decode('utf-8')}"
+            # headers = {
+            #     'Authorization': auth_header,
+            #     'Content-Type': 'application/x-www-form-urlencoded'
+            # }
             headers = {
                 'Authorization': auth_header,
-                'Content-Type': 'application/x-www-form-urlencoded'
+                'Content-Type': 'application/json'
             }
             return headers
         except Exception as err:
@@ -40,7 +44,7 @@ class BYD:
     def get_expense_items(self, **params):
         """Get the list of expense items from BYD. """
         try:
-            path="/imprest/v1/expense-accounts/"
+            path="expense-accounts/"
             return self._fetch_items(path=path, params={**params})
         except Exception as err:
             return None
@@ -48,7 +52,7 @@ class BYD:
     def get_banks(self, **params):
         """Get list of banks from BYD. """
         try:
-            path="/imprest/v1/bank-accounts/"
+            path="bank-accounts/"
             return self._fetch_items(path=path, params={**params})
         except Exception as err:
             return None
