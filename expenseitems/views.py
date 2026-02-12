@@ -98,13 +98,14 @@ class ExpenseItemView(APIView):
         return CustomResponse(True, "Item Deleted Successfully", 200)
     
 
-class ListExpenseItemsView(ListAPIView):
-    serializer_class = ItemSerializer
-    queryset = ExpenseItem.objects.all()
-
-    def get_queryset(self):
+class ListExpenseItemsView(APIView):
+    """Get the list of expense Items from BYD."""
+    def get(self):
         try:
-            expense_items = byd.get_expense_items()
+            page=self.query_params.get("page")
+            size=self.query_params.get("size")
+            search=self.query_params.get("search")
+            expense_items = byd.get_expense_items(page=page, size=size, search=search)
             return expense_items
         except Exception as err:
             return ExpenseItem.objects.none()
