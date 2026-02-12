@@ -79,16 +79,22 @@ class BankListView(APIView):
     
 class ListBanksView(APIView):
     """Get the list of banks from the BYD. """
-    def get(self):
-        page=self.query_params.get("page")
-        size=self.query_params.get("size")
-        search=self.query_params.get("search")
+    def get(self, request):
+        page=request.query_params.get("page")
+        size=request.query_params.get("size")
+        search=request.query_params.get("search")
         try:
             banks = api.get_banks(page=page, size=size, search=search)
             return CustomResponse(
                 valid=True, 
-                message="Banks successfully retrieved from BYD", 
+                msg="Banks successfully retrieved from BYD", 
                 status=200, 
                 data=banks)
         except Exception as err:
-            return Bank.objects.none()
+            return CustomResponse(
+                valid=False, 
+                msg="Unable to retrieve banks from BYD", 
+                status=400, 
+                data={
+                    "error":str(err)
+                })

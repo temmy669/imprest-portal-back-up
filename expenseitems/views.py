@@ -100,15 +100,25 @@ class ExpenseItemView(APIView):
 
 class ListExpenseItemsView(APIView):
     """Get the list of expense Items from BYD."""
-    def get(self):
+    def get(self, request):
         try:
-            page=self.query_params.get("page")
-            size=self.query_params.get("size")
-            search=self.query_params.get("search")
+            page=request.query_params.get("page")
+            size=request.query_params.get("size")
+            search=request.query_params.get("search")
             expense_items = byd.get_expense_items(page=page, size=size, search=search)
-            return expense_items
+            return CustomResponse(
+                valid=True,
+                msg="Expense Items retrieved successfully", 
+                status=200, data=expense_items)
         except Exception as err:
-            return ExpenseItem.objects.none()
+            return CustomResponse(
+                valid=False,
+                msg="Unable to retrieve expense items",
+                status=400,
+                data={
+                    "error":str(err)
+                }
+            )
         
 
         
