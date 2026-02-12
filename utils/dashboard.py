@@ -45,15 +45,14 @@ class DashboardView(APIView):
         today = timezone.now().date()
         iso_calendar = today.isocalendar()
         current_week_number = iso_calendar[1]
-        print("Current week number ==> ", current_week_number)
-        return current_week_number
-        
+        return current_week_number    
 
     def _get_period_range(self, year, month, week_number=None):
         """Return start and end datetime of the given period (week) in a month. 
         :week_number: refers to the number of the selected week.
         - this defaults to the current week.
         """
+        
         day = 1
         first_day = datetime(year, month, day)
         first_monday = first_day + timedelta(days=(7 - first_day.weekday()) % 7)

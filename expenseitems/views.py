@@ -2,6 +2,7 @@ from django.shortcuts import render
 from rest_framework.views import APIView
 from utils.permissions import IsSuperUserOrReadOnly
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.generics import ListAPIView
 from users.auth import JWTAuthenticationFromCookie
 from django.shortcuts import get_object_or_404
 from helpers.response import CustomResponse
@@ -10,6 +11,7 @@ from .models import ExpenseItem
 from .serializers import ItemSerializer
 from utils.pagination import DynamicPageSizePagination
 from rest_framework.exceptions import ValidationError
+from services.byd import api as byd
 # Create your views here.
 
 class ExpenseItemView(APIView):
@@ -94,7 +96,18 @@ class ExpenseItemView(APIView):
         item = get_object_or_404(ExpenseItem, pk=pk)
         item.delete()
         return CustomResponse(True, "Item Deleted Successfully", 200)
+    
 
+class ListExpenseItemsView(ListAPIView):
+    serializer_class = ItemSerializer
+    queryset = ExpenseItem.objects.all()
+
+    def get_queryset(self):
+        try:
+            expense_items = byd.get_expense_items()
+            return expense_items
+        except Exception as err:
+            return ExpenseItem.objects.none()
         
 
         
