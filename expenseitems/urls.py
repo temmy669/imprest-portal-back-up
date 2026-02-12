@@ -1,9 +1,9 @@
 from django.urls import path
-from .views import ExpenseItemView
+from .views import ExpenseItemView, ListExpenseItemsView
 
 urlpatterns = [
     path('expense-item/', ExpenseItemView.as_view(), name='expense-item'),
-    path('expense-item/all', ListExpenseItemsView.as_view(), name="spool-expense-from-byd"),
+    path('expense-item/byd/', ListExpenseItemsView.as_view(), name="spool-expense-from-byd"),
     path('expense-item/<int:pk>/', ExpenseItemView.as_view(), name='update-item'),
     path('expense-item/<int:pk>/delete/', ExpenseItemView.as_view(), name='delete-item'),
     
