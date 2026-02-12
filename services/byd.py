@@ -32,10 +32,9 @@ class BYD:
             if path:
                 url = self.base_url + path
                 response = requests.get(url=url, headers=self.get_headers(), params=params)
-                print("fetch items", response)
                 if response.status_code == 200:
-                    print("response data ==> ", response.json())
-                    return response.json()
+                    data_:dict = response.json()
+                    return data_.get("data", [])
             else:
                 raise ValidationError("URL Path must be provided.")
         except Exception as err:
