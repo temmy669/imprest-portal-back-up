@@ -56,16 +56,6 @@ class ReimbursementRequestView(APIView):
         user = request.user
         queryset = Reimbursement.objects.all().order_by('-created_at')
 
-        # Role-based access
-        if user.role.name == 'Restaurant Manager':
-            queryset = queryset.filter(store_id=user.store_id)
-        elif user.role.name == 'Area Manager':
-            queryset = queryset.filter(store__in=user.assigned_stores.all())
-        elif user.role.name == 'Internal Control':
-            queryset = queryset.filter(status__in=['approved', 'pending'])
-        elif user.role.name == 'Treasurer':
-            queryset = queryset.filter(internal_control_status='approved')
-
         # Get filters
         area_manager_ids = request.query_params.getlist("area_manager")
         store_ids = request.query_params.getlist("stores")
@@ -77,6 +67,16 @@ class ReimbursementRequestView(APIView):
         search_query = request.query_params.get("q", "").strip()
         region_id = request.query_params.get("region")
         disbursement_status = request.query_params.get("disbursement_status")
+
+        # Role-based access
+        if user.role.name == 'Restaurant Manager':
+            queryset = queryset.filter(store_id=user.store_id)
+        elif user.role.name == 'Area Manager':
+            queryset = queryset.filter(store__in=user.assigned_stores.all())
+        elif user.role.name == 'Internal Control':
+            queryset = queryset.filter(status__in=['approved', 'pending'])
+        elif user.role.name == 'Treasurer':
+            queryset = queryset.filter(internal_control_status='approved')
         
         # Determine which field represents status for the user role
         if user.role.name == 'Treasurer':
@@ -127,11 +127,11 @@ class ReimbursementRequestView(APIView):
             queryset = queryset.filter(status=status)
         
         if internal_control_status:
-            queryset = queryset.filter(internal_control_status=internal_control_status)
+            if internal_control_status in ["approved", "declined"]:
+                queryset = queryset.filter(
+                    internal_control_status=internal_control_status, 
+                    internal_control=user)
             
-            # status_filter = True
-            # status_field
-
         if search:
             queryset = queryset.filter(
                 Q(requester__first_name__icontains=search) |
@@ -148,11 +148,11 @@ class ReimbursementRequestView(APIView):
             else:
                 return CustomResponse(False, "Only RR-XXXX search is supported in 'q'", 400)
         
-        
+    
         # #return empty status count if queryset is empty after filters
         # if not queryset.exists():
         #     status_count_dict = {}
-            
+        
         # --- Pagination and serialization ---
         paginator = DynamicPageSizePagination()
         paginated_queryset = paginator.paginate_queryset(queryset, request)
