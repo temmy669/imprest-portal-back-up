@@ -51,6 +51,7 @@ class ReimbursementItemSerializer(serializers.ModelSerializer):
         # Basic validations
         if unit_price is not None and unit_price < 0:
             raise serializers.ValidationError({"unit_price": "Unit price cannot be negative."})
+        
         if quantity is not None and quantity <= 0:
             raise serializers.ValidationError({"quantity": "Quantity must be greater than zero."})
 
@@ -109,12 +110,13 @@ class ReimbursementSerializer(serializers.ModelSerializer):
         read_only_fields = ['requester', 'disbursement_status', 'balance']
         
     def validate(self, attrs):
+
+        print("validating data <==> ", attrs)
         request = self.context['request']
         user = request.user
         store = user.store
 
         items = attrs.get('items', [])
-
         if not store or not store.budget:
             return attrs  # No budget configured → allow
 
@@ -141,6 +143,7 @@ class ReimbursementSerializer(serializers.ModelSerializer):
         )
 
         projected_total = weekly_expenses + incoming_total
+        print("projected total <==> ", projected_total)
 
         if projected_total > store.budget:
             raise ValidationError({
@@ -194,10 +197,10 @@ class ReimbursementSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
             # REMOVE requester if present in validated_data
             validated_data.pop('requester', None)
-
             items_data = validated_data.pop('items')
             comments_data = validated_data.pop('comments', [])
 
+            print("Validated data <==> ", validated_data)
             user = self.context['request'].user
 
             # Validate items
@@ -220,7 +223,7 @@ class ReimbursementSerializer(serializers.ModelSerializer):
             total_amount = sum(
                 Decimal(i['unit_price']) * i['quantity'] for i in items_data
             )
-
+            print("total amount...")
             reimbursement = Reimbursement.objects.create(
                 requester=user,
                 total_amount=total_amount,

@@ -174,16 +174,14 @@ class ReimbursementRequestView(APIView):
         
 
     def post(self, request):
-        
         # Step 1: Create reimbursement (draft by default)
+        print("Request Data ==> ", request.data)
         try:
             serializer = ReimbursementSerializer(data=request.data, context={'request': request})
             if not serializer.is_valid():
                 errors = serializer.errors
-
                 # Try to extract a meaningful message
                 message = "Invalid data"
-
                 if isinstance(errors, dict):
                     if 'detail' in errors:
                         message = errors['detail']
@@ -363,10 +361,9 @@ class ApproveReimbursementView(APIView):
     def post(self, request, pk):
        with transaction.atomic(): 
             reimbursement = get_object_or_404(Reimbursement, pk=pk)
-            self.check_object_permissions(request, reimbursement)
-
+            # self.check_object_permissions(request, reimbursement)
             role = request.user.role.name
-
+            print("role", role)
             if role == "Area Manager":
                 if reimbursement.status != "pending":
                     return CustomResponse(False, "Reimbursement is not pending", 400)
@@ -391,11 +388,10 @@ class ApproveReimbursementView(APIView):
             reimbursement.updated_by = request.user
             reimbursement.save(user=request.user)
 
-
-            send_reimbursement_approval_notification(
-                reimbursement,
-                request.user
-            )
+            # send_reimbursement_approval_notification(
+            #     reimbursement,
+            #     request.user
+            # )
 
             return CustomResponse(
                 True,
@@ -490,9 +486,10 @@ class DeclineReimbursementView(APIView):
             items = re.items.select_for_update().all()
 
             self.check_object_permissions(request, re)
+            user_role = request.user.role.name
 
             # -------- INTERNAL CONTROL DECLINE --------
-            if request.user.role.name == "Internal Control":
+            if user_role == "Internal Control":
                 re.internal_control_status = "declined"
                 re.status = "pending"
                 re.internal_control = request.user
@@ -504,13 +501,11 @@ class DeclineReimbursementView(APIView):
                 )
 
                 re.save(user=request.user)
-
                 send_reimbursement_rejection_notification(
                     re, request.user, comment_text
                 )
-
             # -------- AREA MANAGER FINAL DECLINE --------
-            elif request.user.role.name == "Area Manager":
+            elif user_role == "Area Manager":
                 re.status = "declined"
                 re.area_manager = request.user
                 re.area_manager_declined_at = timezone.now()
