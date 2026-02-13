@@ -85,12 +85,14 @@ class ReimbursementRequestView(APIView):
             status_field = 'disbursement_status'
         elif user.role.name == 'Internal Control':
             status_field = 'internal_control_status'
+
         else:
             status_field = 'status'
 
         # Keep a base queryset for status count BEFORE applying query param filters
         base_queryset_for_status_count = queryset
         status_filter = False
+        
         # Calculate status counts across all statuses BEFORE query param filters
         # status_counts_all = (
         #     base_queryset_for_status_count
