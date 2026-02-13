@@ -68,18 +68,13 @@ class ReimbursementRequestView(APIView):
         region_id = request.query_params.get("region")
         disbursement_status = request.query_params.get("disbursement_status")
 
-        # Analytics metrics.
-        approved_count = 0
-        pending_count = 0
-        declined_count = 0
-
         # Role-based access
         if user.role.name == 'Restaurant Manager':
             queryset = queryset.filter(store_id=user.store_id)
         elif user.role.name == 'Area Manager':
             queryset = queryset.filter(store__in=user.assigned_stores.all())
         elif user.role.name == 'Internal Control':
-            queryset = queryset.filter(status__in=['approved', 'pending'])
+            queryset = queryset.filter(Q(status__in=['approved', 'pending']) & Q( Q(internal_control=user)| Q(internal_control__isnull=True) ))
         elif user.role.name == 'Treasurer':
             queryset = queryset.filter(internal_control_status='approved')
         
@@ -95,15 +90,14 @@ class ReimbursementRequestView(APIView):
         base_queryset_for_status_count = queryset
         status_filter = False
         # Calculate status counts across all statuses BEFORE query param filters
-        status_counts_all = (
-            base_queryset_for_status_count
-            .values(status_field)
-            .annotate(count=Count(status_field))
-            .order_by()
-        )
-
-        print("Status count all ==> ", status_counts_all)
-        status_count_dict = {item[status_field]: item["count"] for item in status_counts_all}
+        # status_counts_all = (
+        #     base_queryset_for_status_count
+        #     .values(status_field)
+        #     .annotate(count=Count(status_field))
+        #     .order_by()
+        # )
+        # print("Status count all ==> ", status_counts_all)
+        # status_count_dict = {item[status_field]: item["count"] for item in status_counts_all}
 
         # --- Now apply filters ---
         if area_manager_ids:
@@ -134,10 +128,8 @@ class ReimbursementRequestView(APIView):
             queryset = queryset.filter(status=status)
         
         if internal_control_status:
-            if internal_control_status in ["approved", "declined"]:
-                queryset = queryset.filter(
-                    internal_control_status=internal_control_status, 
-                    internal_control=user)
+            queryset = queryset.filter(
+                internal_control_status=internal_control_status)
             
         if search:
             queryset = queryset.filter(
@@ -159,6 +151,17 @@ class ReimbursementRequestView(APIView):
         # #return empty status count if queryset is empty after filters
         # if not queryset.exists():
         #     status_count_dict = {}
+        
+        # STATUS COUNT
+        status_counts_all = (
+            base_queryset_for_status_count
+            .values(status_field)
+            .annotate(count=Count(status_field))
+            .order_by()
+        )
+
+        print("Status count all ==> ", status_counts_all)
+        status_count_dict = {item[status_field]: item["count"] for item in status_counts_all}
         
         # --- Pagination and serialization ---
         paginator = DynamicPageSizePagination()
