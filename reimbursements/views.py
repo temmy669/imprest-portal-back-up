@@ -68,6 +68,11 @@ class ReimbursementRequestView(APIView):
         region_id = request.query_params.get("region")
         disbursement_status = request.query_params.get("disbursement_status")
 
+        # Analytics metrics.
+        approved_count = 0
+        pending_count = 0
+        declined_count = 0
+
         # Role-based access
         if user.role.name == 'Restaurant Manager':
             queryset = queryset.filter(store_id=user.store_id)
@@ -96,6 +101,8 @@ class ReimbursementRequestView(APIView):
             .annotate(count=Count(status_field))
             .order_by()
         )
+
+        print("Status count all ==> ", status_counts_all)
         status_count_dict = {item[status_field]: item["count"] for item in status_counts_all}
 
         # --- Now apply filters ---
