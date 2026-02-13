@@ -58,6 +58,7 @@ class ReimbursementRequestView(APIView):
 
         # Get filters
         area_manager_ids = request.query_params.getlist("area_manager")
+        print("area manager IDs")
         store_ids = request.query_params.getlist("stores")
         start_date = request.query_params.get("start_date")
         end_date = request.query_params.get("end_date")
@@ -92,7 +93,7 @@ class ReimbursementRequestView(APIView):
         # Keep a base queryset for status count BEFORE applying query param filters
         base_queryset_for_status_count = queryset
         status_filter = False
-        
+
         # Calculate status counts across all statuses BEFORE query param filters
         # status_counts_all = (
         #     base_queryset_for_status_count
@@ -161,7 +162,7 @@ class ReimbursementRequestView(APIView):
         
         # STATUS COUNT
         status_counts_all = (
-            queryset
+            base_queryset_for_status_count,
             .values(status_field)
             .annotate(count=Count(status_field))
             .order_by()
