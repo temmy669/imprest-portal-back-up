@@ -187,15 +187,14 @@ class ReimbursementRequestView(APIView):
                 if isinstance(errors, dict):
                     if 'detail' in errors:
                         message = errors['detail']
+
                     else:
                         first_key = next(iter(errors))
                         first_error = errors[first_key]
-
                         if isinstance(first_error, list):
                             message = first_error[0]
                         else:
                             message = first_error
-
 
                 return CustomResponse(
                     False,

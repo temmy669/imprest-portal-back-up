@@ -304,7 +304,6 @@ class DeclinePurchaseRequestView(APIView):
         with transaction.atomic():
             # Lock the PR to prevent concurrency issues
             pr = PurchaseRequest.objects.select_for_update().get(pk=pk)
-
             if pr.status in ("approved", "declined"):
                 return CustomResponse(False, "This purchase request has already been processed.", 400)
 
