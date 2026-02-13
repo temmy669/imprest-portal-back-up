@@ -252,27 +252,21 @@ class ApprovePurchaseRequestItemView(APIView):
             return CustomResponse(False, "Item is already approved.", 400)
 
         with transaction.atomic():
-
             # Lock PR and item row
             pr = PurchaseRequest.objects.select_for_update().get(pk=pk)
             item = PurchaseRequestItem.objects.select_for_update().get(pk=item_id, request=pr)
-
             # Approve this item
             item.status = "approved"
             item.save()
-
             # Re-fetch all items safely
             items = list(pr.items.select_for_update())
-
             # If ANY item is declined → PR remains declined
             if any(i.status == "declined" for i in items):
                 pr.status = "declined"
                 pr.area_manager = request.user
                 pr.area_manager_declined_at = timezone.now()
                 pr.save()
-                
                 # Decline emails are only sent when an item is DECLINED, not approved.
-
             # If ALL items are approved → PR is approved
             elif all(i.status == "approved" for i in items):
                 pr.status = "approved"
@@ -281,12 +275,10 @@ class ApprovePurchaseRequestItemView(APIView):
                 pr.area_manager_approved_at = timezone.now()
                 pr.save()
                 send_approval_notification(pr)  # Uncomment when ready
-
             # Else: some pending, some approved → PR stays pending
             else:
                 pr.status = "pending"
                 pr.save()
-
         return CustomResponse(
             True,
             {
@@ -297,7 +289,6 @@ class ApprovePurchaseRequestItemView(APIView):
             200
         )
 
-        
 class DeclinePurchaseRequestView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
     permission_classes = [IsAuthenticated, DeclinePurchaseRequest]
