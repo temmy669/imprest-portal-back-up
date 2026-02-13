@@ -154,7 +154,6 @@ class ReimbursementRequestView(APIView):
         #     status_count_dict = {}
             
         # --- Pagination and serialization ---
-        
         paginator = DynamicPageSizePagination()
         paginated_queryset = paginator.paginate_queryset(queryset, request)
         serializer = ReimbursementSerializer(paginated_queryset, many=True)
@@ -509,11 +508,8 @@ class DeclineReimbursementView(APIView):
                 re.status = "declined"
                 re.area_manager = request.user
                 re.area_manager_declined_at = timezone.now()
-
                 items.update(status="declined")
-
                 re.save(user=request.user)
-
                 send_reimbursement_rejection_notification(
                     re, request.user, comment_text
                 )
