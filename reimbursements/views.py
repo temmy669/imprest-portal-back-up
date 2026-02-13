@@ -162,7 +162,7 @@ class ReimbursementRequestView(APIView):
         
         # STATUS COUNT
         status_counts_all = (
-            base_queryset_for_status_count,
+            base_queryset_for_status_count
             .values(status_field)
             .annotate(count=Count(status_field))
             .order_by()
