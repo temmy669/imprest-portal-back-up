@@ -811,27 +811,31 @@ class DisbursemntView(APIView):
     
     # Disburse a reimbursement request and its items
     def post(self, request, pk):
-        reimbursement = get_object_or_404(Reimbursement, pk=pk)
-        
-        if reimbursement.disbursement_status != 'pending':
-            return CustomResponse(False, "The selected reimbursement is not a pending disbursement", 400)
-        
-        reimbursement.disbursement_status = 'disbursed'
-        reimbursement.treasurer = request.user
-        bank_id = request.data.get('bank')
-        account_id = request.data.get('account')
-        reimbursement.bank = get_object_or_404(Bank, id=bank_id)
-        reimbursement.account = get_object_or_404(Account, id=account_id)
-        reimbursement.disbursed_at = timezone.now()
-           
-            
-        reimbursement.updated_by = request.user
-        reimbursement.save(user=request.user)
-       
-        
-        message = f"Reimbursement disbursed by Treasurer successfully"
 
-        return CustomResponse(True, message, 200)
+        try:
+            bank_id = request.data.get('bank', None)
+            account_id = request.data.get('account', None)
+
+            if not bank_id or not account_id:
+                return CustomResponse(False, "Bank and account IDs are required", 400)
+
+            reimbursement = get_object_or_404(Reimbursement, pk=pk)
+            if reimbursement.disbursement_status != 'pending':
+                return CustomResponse(False, "The selected reimbursement is not a pending disbursement", 400)
+            
+            reimbursement.bank = get_object_or_404(Bank, pk=bank_id)
+            reimbursement.account = get_object_or_404(Account, pk=account_id)
+            
+            reimbursement.disbursement_status = 'disbursed'
+            reimbursement.treasurer = request.user
+            reimbursement.disbursed_at = timezone.now()
+            reimbursement.updated_by = request.user
+            reimbursement.save(user=request.user)
+    
+            message = f"Reimbursement disbursed by Treasurer successfully"
+            return CustomResponse(True, message, 200)
+        except Exception as err:
+            return CustomResponse(False, "Unable to disburse expense", 400, {"error":str(err)})
     
 class BulkDisbursementView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
