@@ -831,9 +831,12 @@ class DisbursemntView(APIView):
             reimbursement.disbursed_at = timezone.now()
             reimbursement.updated_by = request.user
             reimbursement.save(user=request.user)
+
+            # UPDATE STORE BALANCE
     
             message = f"Reimbursement disbursed by Treasurer successfully"
             return CustomResponse(True, message, 200)
+        
         except Exception as err:
             return CustomResponse(False, "Unable to disburse expense", 400, {"error":str(err)})
     
