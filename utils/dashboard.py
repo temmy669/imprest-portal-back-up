@@ -195,17 +195,8 @@ class DashboardView(APIView):
         else:
             # If no week number is specified, get the number of the current week
             # if multiple store is selected, use current week to get the week start and end dates
-            current_week_number = self._get_current_week_month()
-            print("Current week month", current_week_number)
-
-            if stores.count() > 1:
-                week_start, week_end = self._get_week_range(year, month, current_week_number)
-            else:
-                # If a single store, and no week is specified, the week start and week end of the account period
-                # The accounting period is the time the last disbursement was made or the first purchase request 
-                # was approved
-                week_start = self._get_current_accounting_period(stores)
-                week_end = week_start + timedelta(days=6, hours=23, minutes=59, seconds=59)
+            week_start = self._get_current_accounting_period(stores)
+            week_end = week_start + timedelta(days=6, hours=23, minutes=59, seconds=59)
 
         # --- Set date range for month ---
         start_month = timezone.make_aware(datetime(year, month, 1))
