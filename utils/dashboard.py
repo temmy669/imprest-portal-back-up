@@ -183,7 +183,7 @@ class DashboardView(APIView):
         #     )
 
         # --- Calculate Weekly Period ---
-        print("Current Week Number ==> ", self._get_current_week())
+        print("Current Week Number ==> ", self._get_current_week_month())
         if week_number:
             # Specific week requested
             try:
