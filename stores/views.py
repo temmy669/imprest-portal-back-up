@@ -272,13 +272,10 @@ class StoreBudgetView(APIView):
     permission_classes = [IsAuthenticated, ManageUsers]
     
     def get(self, request):
-        
         queryset = Store.objects.all().order_by('-created_at')
-        
         area_manager_id = request.query_params.get('area_manager')
         if area_manager_id:
             queryset = Store.objects.filter(area_manager__id=area_manager_id).order_by('-created_at')
-             
         paginator = DynamicPageSizePagination()
         paginated_stores = paginator.paginate_queryset(queryset, request)
         serializer = StoreBudgetSerializer(paginated_stores, many=True)
@@ -287,13 +284,11 @@ class StoreBudgetView(APIView):
                                                                                 "previous": paginator.get_previous_link(),
                                                                                 "results": serializer.data,
                                                                                 })
-    
     def post(self, request):
         """Creates a new store"""
         serializer = StoreBudgetSerializer(data=request.data)
         if serializer.is_valid():
             store = serializer.save()
-
             # Track initial budget history
             StoreBudgetHistory.objects.create(
                 store=store,
@@ -302,12 +297,10 @@ class StoreBudgetView(APIView):
                 comment=request.data.get("comment", "Initial allocation"),
                 updated_by=request.user if request.user.is_authenticated else None
             )
-
             # # Initialize balance if budget > 0
             # if store.balance == 0 and store.budget > 0:
             #     store.balance = store.budget
             #     store.save(update_fields=['balance'])
-
             return CustomResponse(True, "Store added", data=serializer.data)
         return CustomResponse(False, serializer.errors, 400)
 

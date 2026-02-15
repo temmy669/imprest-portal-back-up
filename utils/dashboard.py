@@ -1,4 +1,5 @@
 from .permissions import *
+from datetime import date
 from helpers.response import CustomResponse
 from rest_framework.views import APIView
 from purchases.models import PurchaseRequest
@@ -21,7 +22,8 @@ class DashboardView(APIView):
     def _get_user_stores(self, user, store_IDs=None):
         """Get stores based on user role and optional store filter"""
         role_name = getattr(getattr(user, "role", None), "name", "").strip()
-    
+        print("user role", role_name)
+
         if role_name == "Restaurant Manager":
             return Store.objects.filter(id=user.store_id)
         
@@ -116,11 +118,41 @@ class DashboardView(APIView):
         
         return timezone.make_aware(datetime.combine(period_start, datetime.min.time()))
     
-    def _get_current_week(self):
+    def _get_current_week_year(self):
         """Get the weekn number for the current week. """
-        date = timezone.now().date()
-        calendar = date.isocalendar()
+        date_ = timezone.now().date()
+        calendar = date_.isocalendar()
         return calendar.week
+    
+    def _get_current_week_month(self):
+        """
+            Calculates the week number of the month based on ISO week numbering 
+            (Monday as the first day of the week by default).
+        """
+        # Get the ISO week number of the current date
+        date_ = timezone.now().date()
+        calendar = date_.isocalendar()
+        current_week_of_year = calendar.week
+        
+        # Get the ISO week number of the first day of the month
+        first_day_of_month = date(date_.year, date_.month, 1)
+        _, first_day_week_of_year, _ = first_day_of_month.isocalendar()
+        
+        # If the first week of the month belongs to the previous year's last week (ISO standard behavior),
+        # the simple subtraction needs adjustment. However, for a basic calculation:
+        
+        # This subtraction gives the difference in week numbers. Add 1 because we're 1-indexing the weeks.
+        week_in_month = current_week_of_year - first_day_week_of_year + 1
+        
+        # Handle edge case where the current week of year is smaller than the first day's (e.g., year boundary)
+        if week_in_month < 1:
+            # This typically means the date belongs to the 'previous month's' partial week 
+            # in the context of ISO week numbering, so we set it to 1.
+            week_in_month = 1 
+
+        print("Week of the month ==> ", week_in_month)
+        return week_in_month
+        
 
     def get(self, request):
 
@@ -137,10 +169,10 @@ class DashboardView(APIView):
             week_number = None
 
         # Get Store filter
-        store_ids = request.query_params.getlist("stores", [])
-        print("Store IDs", store_ids)
+        store_ids = request.query_params.getlist("store", [])
         stores = self._get_user_stores(user, store_IDs=store_ids)
-        print("Stores", stores)
+        # print("stores", stores)
+        print("Stores", stores.values_list("id"))
 
         # if not stores.exists():
         #     return CustomResponse(
@@ -151,6 +183,7 @@ class DashboardView(APIView):
         #     )
 
         # --- Calculate Weekly Period ---
+        print("Current Week Number ==> ", self._get_current_week())
         if week_number:
             # Specific week requested
             try:
@@ -158,11 +191,13 @@ class DashboardView(APIView):
                 week_start, week_end = self._get_week_range(year, month, week_num)
             except:
                 # Fallback to current accounting period
-                week_start, week_end = self._get_week_range(year, month, self._get_current_week())
+                week_start, week_end = self._get_week_range(year, month, self._get_current_week_month())
         else:
             # If no week number is specified, get the number of the current week
             # if multiple store is selected, use current week to get the week start and end dates
-            current_week_number = self._get_current_week()
+            current_week_number = self._get_current_week_month()
+            print("Current week month", current_week_number)
+
             if stores.count() > 1:
                 week_start, week_end = self._get_week_range(year, month, current_week_number)
             else:

@@ -1,5 +1,6 @@
 import logging
 from django.db import models
+from datetime import date
 from django.utils import timezone
 from datetime import datetime
 from django.utils.functional import cached_property
@@ -59,20 +60,46 @@ class Store(models.Model):
         return remaining_balance
     
    
-    def _get_current_week(self):
+    def _get_current_week_year(self):
         """Get the number of the current week. """
-        today = datetime.date.today()
+        today = timezone.now().date()
         iso_calendar = today.isocalendar()
-        return iso_calendar[1]
+        return iso_calendar.week
+    
+    def _get_current_week_month(self):
+        """
+            Calculates the week number of the month based on ISO week numbering 
+            (Monday as the first day of the week by default).
+        """
+        # Get the ISO week number of the current date
+        date_ = timezone.now().date()
+        calendar = date_.isocalendar()
+        current_week_of_year = calendar.week
+        
+        # Get the ISO week number of the first day of the month
+        first_day_of_month = date(date_.year, date_.month, 1)
+        _, first_day_week_of_year, _ = first_day_of_month.isocalendar()
+        
+        # If the first week of the month belongs to the previous year's last week (ISO standard behavior),
+        # the simple subtraction needs adjustment. However, for a basic calculation:
+        
+        # This subtraction gives the difference in week numbers. Add 1 because we're 1-indexing the weeks.
+        week_in_month = current_week_of_year - first_day_week_of_year + 1
+        
+        # Handle edge case where the current week of year is smaller than the first day's (e.g., year boundary)
+        if week_in_month < 1:
+            # This typically means the date belongs to the 'previous month's' partial week 
+            # in the context of ISO week numbering, so we set it to 1.
+            week_in_month = 1 
+        return week_in_month
     
     def can_raise_expense(self, amount):
         """Check if a user can raise expense. 
         A user can only raise expense if the store balance is greater than or equal to 
         the intended expense amount.
         """
-        current_allocation = self.allocations.filter(is_current=True).last()
-        print("current allocation", current_allocation)
-        if current_allocation and current_allocation.balance >= amount:
+        last_allocation = self.allocations.filter(is_current=True).last()
+        if last_allocation and last_allocation.balance >= amount:
             return True
         return False
     
@@ -106,7 +133,8 @@ class Allocation(models.Model):
     amount = models.FloatField()
     balance = models.FloatField(default=0)
     date = models.DateTimeField(auto_now_add=True)
-    week = models.PositiveSmallIntegerField(blank=True, null=True)
+    year_week = models.PositiveSmallIntegerField(blank=True, null=True)
+    month_week = models.PositiveBigIntegerField(blank=True, null=True)
     is_current = models.BooleanField(default=False)
 
 class StoreBudgetHistory(models.Model):
