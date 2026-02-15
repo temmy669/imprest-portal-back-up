@@ -138,7 +138,9 @@ class DashboardView(APIView):
 
         # Get Store filter
         store_ids = request.query_params.getlist("stores", [])
+        print("Store IDs", store_ids)
         stores = self._get_user_stores(user, store_IDs=store_ids)
+        print("Stores", stores)
 
         # if not stores.exists():
         #     return CustomResponse(
@@ -271,6 +273,21 @@ class DashboardView(APIView):
         if not available_weeks:  # Edge case: month starts on Tuesday or later
             available_weeks = [1]
 
+        print("imprest amount", total_imprest)
+        print("weekly expenses", weekly_expenses)
+        print("weekly balance", weekly_balance)
+
+        """
+          {
+                "role": user.role.name if user.role else None,
+                "stores_count": stores.count(),
+                "weekly_balance": float(weekly_balance),
+                "weekly_expenses": float(weekly_expenses),
+                "imprest_amount": float(budget),
+                "top_monthly_purchases": top_monthly_purchases,
+                "line_chart_data": line_chart_data,
+            }
+        """
         # --- Final Response ---
         return CustomResponse(
             True,
@@ -288,7 +305,7 @@ class DashboardView(APIView):
                     "start": week_start.strftime("%Y-%m-%d"),
                     "end": week_end.strftime("%Y-%m-%d")
                 },
-                "total_imprest": float(total_imprest),
+                "imprest_amount": float(total_imprest),
                 "weekly_expenses": float(weekly_expenses),
                 "weekly_balance": float(weekly_balance),
                 # "budget_warnings": store_budget_warnings,  # Stores exceeding budget
