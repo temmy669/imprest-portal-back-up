@@ -160,27 +160,18 @@ class DashboardView(APIView):
         now = timezone.now()
 
         # Parse filters
-        try:
-            month = int(request.query_params.get("month", now.month))
-            year = int(request.query_params.get("year", now.year))
-            week_number = request.query_params.get("week", None)
-        except:
-            month, year = now.month, now.year
-            week_number = None
+      
+        month = int(request.query_params.get("month", now.month))
+        year = int(request.query_params.get("year", now.year))
+        week_number = request.query_params.get("week", None)
+    
 
         # Get Store filter
         store_ids = request.query_params.getlist("store", [])
         stores = self._get_user_stores(user, store_IDs=store_ids)
+
         # print("stores", stores)
         print("Stores", stores.values_list("id"))
-
-        # if not stores.exists():
-        #     return CustomResponse(
-        #         False,
-        #         "No stores available for this user",
-        #         403,
-        #         {}
-        #     )
 
         # --- Calculate Weekly Period ---
         print("Current Week Number ==> ", self._get_current_week_month())
@@ -195,8 +186,9 @@ class DashboardView(APIView):
         else:
             # If no week number is specified, get the number of the current week
             # if multiple store is selected, use current week to get the week start and end dates
-            week_start = self._get_current_accounting_period(stores)
-            week_end = week_start + timedelta(days=6, hours=23, minutes=59, seconds=59)
+            # week_start = self._get_current_accounting_period(stores)
+            # week_end = week_start + timedelta(days=6, hours=23, minutes=59, seconds=59)
+            week_start, week_end = self._get_week_range(year, month, self._get_current_week_month())
 
         # --- Set date range for month ---
         start_month = timezone.make_aware(datetime(year, month, 1))
