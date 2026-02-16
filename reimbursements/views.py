@@ -58,7 +58,7 @@ class ReimbursementRequestView(APIView):
 
         # Get filters
         area_manager_ids = request.query_params.getlist("area_manager")
-        print("area manager IDs")
+       
         store_ids = request.query_params.getlist("stores")
         start_date = request.query_params.get("start_date")
         end_date = request.query_params.get("end_date")

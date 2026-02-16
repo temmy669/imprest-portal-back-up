@@ -165,7 +165,6 @@ class DashboardView(APIView):
         year = int(request.query_params.get("year", now.year))
         week_number = request.query_params.get("week", None)
     
-
         # Get Store filter
         store_ids = request.query_params.getlist("store", [])
         stores = self._get_user_stores(user, store_IDs=store_ids)
