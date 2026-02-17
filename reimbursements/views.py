@@ -113,6 +113,7 @@ class ReimbursementRequestView(APIView):
 
         if store_ids:
             queryset = queryset.filter(store_id__in=store_ids)
+            base_queryset_for_status_count = queryset
 
         if region_id:
             queryset = queryset.filter(store__region_id=region_id)
@@ -162,8 +163,7 @@ class ReimbursementRequestView(APIView):
         
         # STATUS COUNT
         status_counts_all = (
-            # base_queryset_for_status_count
-            queryset
+            base_queryset_for_status_count
             .values(status_field)
             .annotate(count=Count(status_field))
             .order_by()
