@@ -162,7 +162,8 @@ class ReimbursementRequestView(APIView):
         
         # STATUS COUNT
         status_counts_all = (
-            base_queryset_for_status_count
+            # base_queryset_for_status_count
+            queryset
             .values(status_field)
             .annotate(count=Count(status_field))
             .order_by()
@@ -866,7 +867,6 @@ class BulkDisbursementView(APIView):
             reimbursement.updated_by = request.user
             reimbursement.save(user=request.user)
             updated_count += 1
-        
         return CustomResponse(True, f"{updated_count} reimbursement(s) disbursed successfully", 200)
     
     
