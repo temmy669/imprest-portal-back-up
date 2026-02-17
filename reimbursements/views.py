@@ -850,8 +850,6 @@ class BulkDisbursementView(APIView):
         if not isinstance(ids, list) or not all(isinstance(i, int) for i in ids):
             return CustomResponse(False, "Invalid 'ids' format. Must be a list of integers.", 400)
         
-        
-        
         reimbursements = Reimbursement.objects.filter(id__in=ids)
         updated_count = 0
         
@@ -861,9 +859,9 @@ class BulkDisbursementView(APIView):
             reimbursement.disbursement_status = 'disbursed'
             reimbursement.treasurer = request.user
             bank_id = request.data.get('bank')
-            account_id = request.data.get('account')
+            # account_id = request.data.get('account')
             reimbursement.bank = get_object_or_404(Bank, id=bank_id)
-            reimbursement.account = get_object_or_404(Account, id=account_id)
+            # reimbursement.account = get_object_or_404(Account, id=account_id)
             reimbursement.disbursed_at = timezone.now()
             reimbursement.updated_by = request.user
             reimbursement.save(user=request.user)
