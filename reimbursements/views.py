@@ -814,9 +814,9 @@ class DisbursemntView(APIView):
 
         try:
             bank_id = request.data.get('bank', None)
-            account_id = request.data.get('account', None)
+            # account_id = request.data.get('account', None)
 
-            if not bank_id or not account_id:
+            if not bank_id:
                 return CustomResponse(False, "Bank and account IDs are required", 400)
 
             reimbursement = get_object_or_404(Reimbursement, pk=pk)
@@ -824,7 +824,7 @@ class DisbursemntView(APIView):
                 return CustomResponse(False, "The selected reimbursement is not a pending disbursement", 400)
             
             reimbursement.bank = get_object_or_404(Bank, pk=bank_id)
-            reimbursement.account = get_object_or_404(Account, pk=account_id)
+            # reimbursement.account = get_object_or_404(Account, pk=account_id)
             
             reimbursement.disbursement_status = 'disbursed'
             reimbursement.treasurer = request.user
@@ -833,7 +833,6 @@ class DisbursemntView(APIView):
             reimbursement.save(user=request.user)
 
             # UPDATE STORE BALANCE
-    
             message = f"Reimbursement disbursed by Treasurer successfully"
             return CustomResponse(True, message, 200)
         

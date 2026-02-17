@@ -136,10 +136,9 @@ class DashboardView(APIView):
         # Get the ISO week number of the first day of the month
         first_day_of_month = date(date_.year, date_.month, 1)
         _, first_day_week_of_year, _ = first_day_of_month.isocalendar()
-        
+
         # If the first week of the month belongs to the previous year's last week (ISO standard behavior),
         # the simple subtraction needs adjustment. However, for a basic calculation:
-        
         # This subtraction gives the difference in week numbers. Add 1 because we're 1-indexing the weeks.
         week_in_month = current_week_of_year - first_day_week_of_year + 1
         
@@ -149,7 +148,6 @@ class DashboardView(APIView):
             # in the context of ISO week numbering, so we set it to 1.
             week_in_month = 1 
 
-        print("Week of the month ==> ", week_in_month)
         return week_in_month
         
 
