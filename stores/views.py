@@ -27,17 +27,13 @@ class StoreListView(APIView):
     """
     def get(self, request):
         """
-        Handles GET requests for store listing.
+          Handles GET requests for store listing.
         """
         stores = Store.objects.all()
-        
         #filter stores by provided area managers
         area_manager_ids = request.query_params.getlist('area_manager')
-        
         if area_manager_ids:
             stores = stores.filter(area_manager__id__in=area_manager_ids)
-
-        
         serializer = StoreSerializer(stores, many=True)
         return CustomResponse(True, "Stores returned Successfully", data=serializer.data)
     
@@ -139,11 +135,9 @@ class AssignStoresToUserView(APIView):
         - store_ids: List of store IDs to assign (in request body)
         """
         store_ids = request.data.get('store_ids', [])
-        
         try:
             # Verify user exists
             user = User.objects.get(pk=user_id)
-            
             # Get all valid stores from the provided IDs
             stores = Store.objects.filter(id__in=store_ids)
             
@@ -157,13 +151,9 @@ class AssignStoresToUserView(APIView):
             ).exclude(area_manager=user)
 
             if conflicting_stores.exists():
-                return Response(
-                    {
-                        "success": False,
-                        "error": "Some selected stores already have an area manager.",
-                        "detail": "Please choose stores without assigned managers."
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
+                return CustomResponse(
+                    status=False,
+                    msg="Some selected stores already have an area manager."
                 )
 
             # Append new stores to user’s existing list
@@ -172,13 +162,9 @@ class AssignStoresToUserView(APIView):
             # Update area manager on the store objects
             stores.update(area_manager=user)
             
-            return Response(
-                {
-                    "success": True,
-                    "message": "Stores assigned successfully",
-                    "assigned_stores": [store.code for store in stores]  # Return store codes for confirmation
-                },
-                status=status.HTTP_200_OK
+            return CustomResponse(
+                status=True,
+                msg="Store successfully assigned"
             )
             
         except User.DoesNotExist:
@@ -323,13 +309,11 @@ class StoreBudgetView(APIView):
                     comment=request.data.get("comment"),
                     updated_by=request.user if request.user.is_authenticated else None
                 )
-                
             # Update balance if needed
             if store.balance == 0:
                 store.balance = new_budget
                 store.save(update_fields=['balance'])
 
             return CustomResponse(True, "Budget updated successfully", 200, serializer.data)
-
         return CustomResponse(False, serializer.errors, 400)
 

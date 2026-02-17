@@ -22,7 +22,6 @@ class DashboardView(APIView):
     def _get_user_stores(self, user, store_IDs=None):
         """Get stores based on user role and optional store filter"""
         role_name = getattr(getattr(user, "role", None), "name", "").strip()
-        print("user role", role_name)
 
         if role_name == "Restaurant Manager":
             return Store.objects.filter(id=user.store_id)
@@ -314,9 +313,9 @@ class DashboardView(APIView):
                 "role": user.role.name if user.role else None,
                 "stores_count": stores.count(),
                 # "selected_store": int(store_param) if store_param else None,
-                # "selected_year": year,
-                # "selected_month": month,
-                # "selected_week": int(week_number) if week_number else None,
+                "selected_year": year,
+                "selected_month": month,
+                "selected_week": int(week_number) if week_number else self._get_current_week_month(),
                 # "available_weeks": available_weeks,
                 "week_period": {
                     "start": week_start.strftime("%Y-%m-%d"),
