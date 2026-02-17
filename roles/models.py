@@ -5,7 +5,7 @@ from django.db import models
 class Permission(models.Model):
     """
     Custom permissions table for business-specific rules
-    (e.g., "can_approve_above_5000", "can_view_all_stores")
+    (e.g., "can_view_all_stores")
     """
     codename = models.CharField(max_length=100, unique=True)  
     name = models.CharField(max_length=255) 

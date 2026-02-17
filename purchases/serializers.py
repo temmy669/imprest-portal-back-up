@@ -1,31 +1,62 @@
 from rest_framework import serializers
-from .models import PurchaseRequest, PurchaseRequestItem, Comment
+from .models import PurchaseRequest, PurchaseRequestItem, Comment, LimitConfig
+
+
+purchase_limit = LimitConfig.objects.first()
 
 class PurchaseRequestItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = PurchaseRequestItem
-        fields = ['id', 'gl_code', 'expense_item', 'unit_price', 'quantity', 'total_price']
-        read_only_fields = ['total_price']
+        fields = ['id', 'gl_code', 'expense_item', 'unit_price', 'quantity', 'total_price', 'status', 'transportation_from', 'transportation_to',
+                  'receipt_validated', 'extracted_amount', 'extracted_date', 'extracted_vendor', 'validation_errors', 'receipt_no']
+        read_only_fields = ['total_price', 'receipt_validated', 'extracted_amount', 'extracted_date', 'extracted_vendor', 'validation_errors', 'receipt_no']
 
+    def validate(self, attrs):
+        unit_price = attrs.get('unit_price')
+        quantity = attrs.get('quantity')
+        expense_item = attrs.get('expense_item', '').strip().lower()
+        purchase_request_ref = attrs.get('purchase_request_ref')
+        receipt = attrs.get('receipt')
+
+        # Transportation rule
+        if expense_item == 'transportation' and not self.partial:
+            if not attrs.get('transportation_from') or not attrs.get('transportation_to'):
+                raise serializers.ValidationError(
+                    "Transportation items must include 'transportation_from' and 'transportation_to'."
+                )
+                
+        return attrs
+        
 class CommentSerializer(serializers.ModelSerializer):
     user = serializers.StringRelatedField()
     
     class Meta:
         model = Comment
         fields = ['id', 'user', 'text', 'created_at']
+        read_only_fields = ['user', 'created_at', 'role']
+        
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        rep['user'] = f"{instance.user.first_name} {instance.user.last_name}"
+        rep['created_at'] = instance.created_at.strftime('%d-%m-%Y %H:%M:%S')
+        rep['role'] = instance.user.role.name if instance.user.role else None
+        return rep
 
 class PurchaseRequestSerializer(serializers.ModelSerializer):
     items = PurchaseRequestItemSerializer(many=True)
     requester = serializers.StringRelatedField()
     status_display = serializers.CharField(source='get_status_display', read_only=True)
-    
+    comments = CommentSerializer(many=True, required=False)
     class Meta:
         model = PurchaseRequest
         fields = [
             'id', 'requester', 'store', 'status', 'status_display', 
-            'total_amount', 'comment', 'items',
-        ]
-        read_only_fields = ['total_amount', 'requester_email', 'requester_phone', 'store_code', 'request_date']
+            'total_amount', 'comments', 'items', 
+            ]
+        
+        read_only_fields = ['total_amount', 'requester_email', 'role', 'requester_phone', 'store_code',
+                            'request_date', 'request_id', 'comments', 'voucher_id','approved_by', 
+                            'approval_date']
     
     def to_representation(self, instance):
         rep = super().to_representation(instance)
@@ -35,26 +66,162 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
         rep['requester_email'] = instance .requester.email
         rep['requester_phone'] = instance.requester.phone_number
         rep['request_date'] = instance.created_at.strftime('%d-%m-%Y')
+        rep['request_id'] = f"PR-{instance.id:04d}"
+        rep['role'] = instance.requester.role.name if instance.requester.role else None
+        rep['voucher'] = instance.voucher_id 
         
+        #return approval details if status is approved
+        if instance.status == "approved":
+            rep['approved_by'] = f"{instance.area_manager.first_name} {instance.area_manager.last_name}" if instance.area_manager else None
+            rep['approval_date'] = instance.area_manager_approved_at.strftime('%d-%m-%Y') if instance.area_manager_approved_at else None
+    
         return rep
+        
     
     def validate(self, data):
         items = data.get('items', [])
-        total = sum(item['unit_price'] * item['quantity'] for item in items)
-        
-        if total < 5000:  # N5,000 threshold from FRD
-            raise serializers.ValidationError(
-                "You do not require a purchase request for items below N5,000"
-            )
-        
+        total = 0
+       
+        for item in items:
+            item_total = item['unit_price'] * item['quantity']
+            if item_total < purchase_limit.limit:
+                raise serializers.ValidationError(
+                    f"Item '{item['expense_item']}' total is below the purchase request limit and cannot be included in a purchase request."
+                )
+            total += item_total
+
         data['total_amount'] = total
         return data
-    
+
     def create(self, validated_data):
         items_data = validated_data.pop('items')
+        comments_data = validated_data.pop('comments', [])
         request = PurchaseRequest.objects.create(**validated_data)
-        
+        user = self.context['request'].user
+    
         for item_data in items_data:
             PurchaseRequestItem.objects.create(request=request, **item_data)
-        
+    
+        for comment_data in comments_data:
+            Comment.objects.create(request=request, user=user, **comment_data)
+    
         return request
+
+class UpdatePurchaseRequestSerializer(serializers.ModelSerializer):
+    items = PurchaseRequestItemSerializer(many=True)
+    comments = CommentSerializer(many=True, required=False)
+
+    class Meta:
+        model = PurchaseRequest
+        fields = ['store', 'items', 'comments']
+
+    def update(self, instance, validated_data):
+        items_data = validated_data.pop('items', None)
+        comments_data = validated_data.pop('comments', None)
+        
+
+          # Handle item updates and additions
+        if items_data:
+            for i, item_data in enumerate(items_data):
+                # Get the id from initial_data since it may not be in validated_data
+                items = self.initial_data.get('items') or []
+                item_id = (items[i].get('id') if i < len(items) and isinstance(items[i], dict) else None)
+
+                if item_id:
+                    try:
+                        # Make sure the item belongs to this purchase request
+                        item = instance.items.get(id=item_id)
+                    except PurchaseRequestItem.DoesNotExist:
+                        continue
+
+                    # Check if the item data has changed
+                    changed = any(
+                        item_data.get(field) is not None and item_data[field] != getattr(item, field)
+                        for field in ['unit_price', 'quantity', 'expense_item', 'transportation_from', 'transportation_to', 'receipt']
+                    )
+
+                    # Use the nested serializer to update the item
+                    if changed:
+                        item_data['status'] = 'pending'
+                        print(item_data['status'])
+                    item_serializer = PurchaseRequestItemSerializer(item, data=item_data, partial=True)
+                    if item_serializer.is_valid():
+                        item_serializer.save()
+
+                else:
+                    # Ensure required fields are present for creating a new item
+                    if 'unit_price' not in item_data or 'quantity' not in item_data:
+                        continue  # Skip if required fields are missing
+
+                    # Check if an item with the same key attributes already exists to avoid duplicates
+                    existing_item = instance.items.filter(
+                        expense_item=item_data.get('expense_item'),
+                        unit_price=item_data.get('unit_price'),
+                        quantity=item_data.get('quantity')
+                    ).first()
+
+                    if existing_item:
+                        # Update the existing item instead of creating a duplicate
+                        changed = any(
+                            item_data.get(field) is not None and item_data[field] != getattr(existing_item, field)
+                            for field in ['unit_price', 'quantity', 'expense_item', 'transportation_from', 'transportation_to', 'receipt']
+                        )
+                        if changed:
+                            item_data['status'] = 'pending'
+                            print(item_data['status'])
+                        item_serializer = PurchaseRequestItemSerializer(existing_item, data=item_data, partial=True)
+                        if item_serializer.is_valid():
+                            item_serializer.save()
+                    else:
+                        # Create a new item using the nested serializer
+                        item_serializer = PurchaseRequestItemSerializer(data=item_data)
+                        if item_serializer.is_valid():
+                            item_serializer.save(request=instance, status='pending')
+                            
+
+        # After all updates, recalculate total for ALL items
+        all_items = instance.items.all()
+        instance.total_amount = sum(item.total_price for item in all_items)
+
+        # Update reimbursement status based on all items
+        item_statuses = list(all_items.values_list('status', flat=True))
+        if 'pending' in item_statuses:
+            instance.status = 'pending'
+        elif all(status == 'approved' for status in item_statuses):
+            instance.status = 'approved'
+        else:
+            instance.status = 'declined'
+        if comments_data:
+            for comment in comments_data:
+                Comment.objects.create(request=instance, user=self.context['request'].user, **comment)
+
+        instance.save()
+        return instance
+
+    
+class LimitConfigSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LimitConfig
+        fields = ['limit']
+    
+class ApprovedPurchaseRequestSerializer(serializers.ModelSerializer):
+    items = PurchaseRequestItemSerializer(many=True, read_only=True)
+
+    """List serializer for approved purchase requests"""
+    
+    class Meta:
+        model = PurchaseRequest
+        fields = ['voucher_id', 'items', 'reimbursement']
+        read_only_fields = ['voucher_id', 'request_name']
+
+    def to_representation(self, instance):
+        rep = super().to_representation(instance)
+        
+        # Only change request_name if approved
+        if instance.status and instance.status.lower() == "approved":
+            rep['request_name'] = f"PR-{instance.id:04d}-{instance.total_amount:.2f}"
+        else:
+            # Optional: keep original name or set it None
+            rep['request_name'] = instance.request_name
+        
+        return rep

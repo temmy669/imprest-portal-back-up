@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            color: #2e6da4;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .footer {
+            margin-top: 20px;
+            font-size: 0.9em;
+            color: #777;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+
+        th {
+            background: #f5f5f5;
+            text-align: left;
+            padding: 8px;
+        }
+
+        td {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>Reimbursement Request Created</h2>
+        </div>
+
+        <p>Dear {{ area_manager_name }},</p>
+
+        <p>A new reimbursement request <strong>{{ request_id }}</strong> has been created and assigned to you
+            for review.</p>
+
+        <h3>Request Details:</h3>
+        <table>
+            <tr>
+                <th>Store</th>
+                <td>{{ store_name }} ({{ store_code }})</td>
+            </tr>
+            <tr>
+                <th>Total Amount</th>
+                <td>{{ total_amount }}</td>
+            </tr>
+            <tr>
+                <th>Request Date</th>
+                <td>{{ request_date }}</td>
+            </tr>
+            <tr>
+                <th>Status</th>
+                <td>{{ status }}</td>
+            </tr>
+        </table>
+
+        <div class="footer">
+            <p>This is an automated notification. Please do not reply.</p>
+            <p>© {% now "Y" %} {{ company_name }}</p>
+        </div>
+    </div>
+</body>
+
+</html>

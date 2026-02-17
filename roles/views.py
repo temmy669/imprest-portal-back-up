@@ -1,43 +1,45 @@
-from django.shortcuts import render
+from helpers.response import CustomResponse
 from .models import Role, Permission
 from rest_framework.views import APIView
 from .serializers import RoleSerializer, PermissionSerializer
-from rest_framework.response import Response
-from rest_framework import status
 
-# Create your views here.
 class RoleListView(APIView):
     serializer_class = RoleSerializer()
     def get(self, request):
-        """
-        Returns a list of all system roles
-        Example response:
-        {
-            "roles": [
-                {"id": 1, "name": "Restaurant Manager"},
-                {"id": 2, "name": "Area Manager"}
-            ]
-        }
-        """
         roles = Role.objects.all()
         serializer = RoleSerializer(roles, many=True)
-        return Response({"roles": serializer.data})
+        return CustomResponse(True, "Roles returned successfully", data=  serializer.data)
     
     def post(self,request):
-        """
-        Creates a new role on the system
-        Example request:
-        {
-            "name": "New Role Name"
-        }
-        
-        """
         serializer = RoleSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return CustomResponse(True, "Created", 201, serializer.data)
     
+    def put(self, request):
+        role_id = request.data.get('id')
+        permissions = request.data.get('permissions', [])
+
+        try:
+            role = Role.objects.get(id=role_id)
+        except Role.DoesNotExist:
+            return CustomResponse(False, "Role not found", status=404)
+
+        # Update simple fields (non-M2M)
+        for key, value in request.data.items():
+            if key not in ['permissions', 'id']:
+                setattr(role, key, value)
+
+        role.save()
+
+        # Update ManyToManyField
+        # Add new permissions without removing old ones
+        if permissions:
+            role.permissions.add(*permissions)
+
+
+        return CustomResponse(True, "Role updated successfully")
+
 class PermissionListView(APIView):
     serializer_class = PermissionSerializer()
     """
@@ -47,19 +49,16 @@ class PermissionListView(APIView):
     def get(self, request):
         permissions= Permission.objects.all()
         serializer = PermissionSerializer(permissions, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return CustomResponse(True, data=serializer.data)
         
     def post(self, request):
-       serializer = PermissionSerializer(data=request.data)
-       if serializer.is_valid():
-           serializer.save()
-           return Response(serializer.data, status=status.HTTP_201_CREATED)
-       return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer = PermissionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return CustomResponse(True, "Created", 201, serializer.data)
    
     def put(self, request):
         # Update permission
         permission_id = request.data.get('id')
-        
         Permission.objects.filter(id=permission_id).update(**request.data)
-        return Response({"message": "Permission updated successfully"}, status=status.HTTP_200_OK)
-    
+        return CustomResponse(True, "Permission updated successfully")

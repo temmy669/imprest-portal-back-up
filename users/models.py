@@ -4,7 +4,7 @@ from django.utils.translation import gettext_lazy as _
 from django.utils import timezone
 from datetime import timedelta
 from roles.models import Role
-from stores.models import Store
+from stores.models import Store, Region
 
 class User(AbstractUser):
     microsoft_ad_id = models.CharField(
@@ -45,6 +45,14 @@ class User(AbstractUser):
         null=True,
     )
     
+    region = models.ForeignKey(
+        Region,
+         on_delete=models.SET_NULL,
+        null=True,
+        blank=True, 
+        related_name='user_region'
+    )
+    
     # For roles like Restaurant Manager, etc.
     store = models.ForeignKey(
         Store, 
@@ -68,10 +76,19 @@ class User(AbstractUser):
         blank=True,
         help_text=_("The last time the user's profile data was updated.")
     )
+    
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
 
     def save(self, *args, **kwargs):
-        """Custom save method to update `data_updated_at`."""
+        # Auto-fill username if not set
+        if not self.username and self.email:
+            self.username = self.email
+
+        # Update data_updated_at timestamp
         self.data_updated_at = timezone.now()
+
         super().save(*args, **kwargs)
 
 

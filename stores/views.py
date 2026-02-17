@@ -2,11 +2,19 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from .models import Region, Store
-from .serializers import RegionSerializer, StoreSerializer, StoreRegionSerializer
+from .serializers import *
 from django.contrib.auth import get_user_model
-
+from helpers.response import CustomResponse
+from django.shortcuts import get_object_or_404
+from users.auth import JWTAuthenticationFromCookie
+from utils.permissions import ManageUsers
+from rest_framework.permissions import IsAuthenticated
+from decimal import Decimal
+from utils.pagination import DynamicPageSizePagination
+from django.conf import settings
+from .sap_auth_utils import fetch_sap_token
+import requests
 User = get_user_model()
-
 
 class StoreListView(APIView):
     serializer_class = StoreSerializer()
@@ -20,30 +28,43 @@ class StoreListView(APIView):
     def get(self, request):
         """
         Handles GET requests for store listing.
-        
-        Response Format:
-        [
-            {
-                "id": 1,
-                "name": "Lagos Main",
-                "code": "LMN001",
-                "region": {"id": 1, "name": "South-South"}
-            },
-            ...
-        ]
         """
         stores = Store.objects.all()
-        serializer = StoreSerializer(stores, many=True)
-        return Response(serializer.data)
-    
-    def post(self, request):
-        """Creates a new store"""
-        serializer = StoreSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        #filter stores by provided area managers
+        area_manager_ids = request.query_params.getlist('area_manager')
+        
+        if area_manager_ids:
+            stores = stores.filter(area_manager__id__in=area_manager_ids)
 
+        
+        serializer = StoreSerializer(stores, many=True)
+        return CustomResponse(True, "Stores returned Successfully", data=serializer.data)
+    
+class StoreListFromSAPView(APIView):
+    """
+    API endpoint for retrieving all stores from SAP.
+    
+    Returns:
+    - List of all stores fetched from SAP system
+    """
+    def get(self, request):
+        """
+        Handles GET requests for store listing from SAP.
+        """
+        try:
+            sap_token = fetch_sap_token()
+            url = f"{settings.SAP_URL}/api/v1/stores"
+            headers = {
+                "Authorization": f"Bearer {sap_token}"
+            }
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            sap_stores = data.get("data", [])
+            return CustomResponse(True, "Stores fetched from SAP successfully", data=sap_stores)
+        except requests.RequestException as e:
+            return CustomResponse(False, f"Error fetching stores from SAP: {str(e)}", status.HTTP_500_INTERNAL_SERVER_ERROR) 
 
 class RegionListView(APIView):
     serializer_class = RegionSerializer()
@@ -58,26 +79,24 @@ class RegionListView(APIView):
         """
         Handles GET requests for region listing.
         
-        Response Format:
-        [
-            {
-                "id": 1,
-                "name": "South-South"
-            },
-            ...
-        ]
         """
         regions = Region.objects.all()
         serializer = RegionSerializer(regions, many=True)
-        return Response(serializer.data)
+        return CustomResponse(True, "Regions returned Successfully", data=serializer.data)
     
     def post(self, request):
         """Creates a new region"""
         serializer = RegionSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            return CustomResponse(True, "Region Added", data=serializer.data)
+        return CustomResponse(False, serializer.errors, 400)
+
+    def delete(self, request, pk):
+        """Deletes a region"""
+        region = get_object_or_404(Region, pk=pk)
+        region.delete()
+        return CustomResponse(True, "Region Deleted Successfully")
 
 
 class StoreByRegionView(APIView):
@@ -95,23 +114,11 @@ class StoreByRegionView(APIView):
         
         Parameters:
         - region_id: ID of the selected region
-        
-        Response Format:
-        [
-            {
-                "id": 1,
-                "name": "Lagos Main",
-                "code": "LMN001",
-                "region": {"id": 1, "name": "South-South"}
-            },
-            ...
-        ]
         """
         # Only return active stores belonging to the specified region
-        stores = Store.objects.filter(region_id=region_id, is_active=True)
-        serializer = StoreRegionSerializer(stores, many=True)
-        return Response(serializer.data)
-
+        region = get_object_or_404(Region, id=region_id)
+        serializer = StoreRegionSerializer(region)
+        return CustomResponse(True, "Store returned according to selected region", data=serializer.data)
 
 class AssignStoresToUserView(APIView):
     serializer_class = StoreSerializer()
@@ -130,15 +137,6 @@ class AssignStoresToUserView(APIView):
         Parameters:
         - user_id: ID of the user being assigned stores
         - store_ids: List of store IDs to assign (in request body)
-        
-        Request Body Format:
-        {
-            "store_ids": [1, 2, 3]
-        }
-        
-        Responses:
-        - 200: Success with confirmation message
-        - 404: If user doesn't exist
         """
         store_ids = request.data.get('store_ids', [])
         
@@ -149,8 +147,30 @@ class AssignStoresToUserView(APIView):
             # Get all valid stores from the provided IDs
             stores = Store.objects.filter(id__in=store_ids)
             
-            # Replace existing assignments with new ones (atomic operation)
-            user.assigned_stores.set(stores)
+            #check if store alredy has area manager assigned
+          # Get the incoming stores
+            incoming_store_ids = stores.values_list("id", flat=True)
+
+            # Check if any incoming store already has a different manager
+            conflicting_stores = stores.filter(
+                area_manager__isnull=False
+            ).exclude(area_manager=user)
+
+            if conflicting_stores.exists():
+                return Response(
+                    {
+                        "success": False,
+                        "error": "Some selected stores already have an area manager.",
+                        "detail": "Please choose stores without assigned managers."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Append new stores to user’s existing list
+            user.assigned_stores.add(*incoming_store_ids)
+
+            # Update area manager on the store objects
+            stores.update(area_manager=user)
             
             return Response(
                 {
@@ -170,3 +190,146 @@ class AssignStoresToUserView(APIView):
                 },
                 status=status.HTTP_404_NOT_FOUND
             )
+
+
+class DelistStoresFromUserView(APIView):
+    """
+    API endpoint for removing stores from a user (area manager).
+    """
+
+    def post(self, request, user_id):
+        """
+        Handles store delisting from a user.
+
+        Parameters:
+        - user_id: ID of the user being unassigned
+        - store_ids: List of store IDs to remove (in request body)
+        """
+        store_ids = request.data.get("store_ids", [])
+
+        try:
+            user = User.objects.get(id=user_id)
+
+            # Get stores that are BOTH:
+            # - in the request
+            # - currently assigned to this user
+            stores = Store.objects.filter(
+                id__in=store_ids,
+                area_manager=user
+            )
+
+            if not stores.exists():
+                return Response(
+                    {
+                        "success": False,
+                        "error": "No valid stores found",
+                        "detail": "None of the selected stores are assigned to this user."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            store_ids_to_remove = stores.values_list("id", flat=True)
+
+            # Remove from user's assigned stores
+            user.assigned_stores.remove(*store_ids_to_remove)
+
+            # Clear area manager from stores
+            stores.update(area_manager=None)
+
+            return CustomResponse(
+                
+                True,
+                "Stores delisted successfully",
+                200,
+                {
+                    "success": True,
+                    "message": "Stores delisted successfully",
+                    "delisted_stores": [store.code for store in stores]
+                },
+                
+            )
+
+        except User.DoesNotExist:
+            return Response(
+                {
+                    "success": False,
+                    "error": "User not found",
+                    "detail": f"No user exists with ID {user_id}"
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+            
+class ListAreaManagersByRegion(APIView):
+    def get(self, request):
+        regions = Region.objects.all()
+        serializer = RegionAreaManagerSerializer(regions, many=True)
+        return CustomResponse(True, "Regions and managers retrieved successfully", 200, serializer.data)
+    
+
+class StoreBudgetView(APIView):
+    authentication_classes = [JWTAuthenticationFromCookie]
+    permission_classes = [IsAuthenticated, ManageUsers]
+    
+    def get(self, request):
+        queryset = Store.objects.all().order_by('-created_at')
+        area_manager_id = request.query_params.get('area_manager')
+        if area_manager_id:
+            queryset = Store.objects.filter(area_manager__id=area_manager_id).order_by('-created_at')
+        paginator = DynamicPageSizePagination()
+        paginated_stores = paginator.paginate_queryset(queryset, request)
+        serializer = StoreBudgetSerializer(paginated_stores, many=True)
+        return CustomResponse(True, "Store Budgets Retrieved Successfully", 200, {"count": paginator.page.paginator.count,
+                                                                                "next": paginator.get_next_link(),
+                                                                                "previous": paginator.get_previous_link(),
+                                                                                "results": serializer.data,
+                                                                                })
+    def post(self, request):
+        """Creates a new store"""
+        serializer = StoreBudgetSerializer(data=request.data)
+        if serializer.is_valid():
+            store = serializer.save()
+            # Track initial budget history
+            StoreBudgetHistory.objects.create(
+                store=store,
+                previous_budget=Decimal("0.00"),
+                new_budget=store.budget,
+                comment=request.data.get("comment", "Initial allocation"),
+                updated_by=request.user if request.user.is_authenticated else None
+            )
+            # # Initialize balance if budget > 0
+            # if store.balance == 0 and store.budget > 0:
+            #     store.balance = store.budget
+            #     store.save(update_fields=['balance'])
+            return CustomResponse(True, "Store added", data=serializer.data)
+        return CustomResponse(False, serializer.errors, 400)
+
+
+    def put(self, request, pk):
+        store = get_object_or_404(Store, pk=pk)
+        old_budget = store.budget
+
+        serializer = StoreBudgetSerializer(store, data=request.data, partial=True)
+        if serializer.is_valid():
+            updated_store = serializer.save()
+
+            # Track budget history if changed
+            new_budget = updated_store.budget
+            if old_budget != new_budget:
+                StoreBudgetHistory.objects.create(
+                    store=store,
+                    previous_budget=old_budget,
+                    new_budget=new_budget,
+                    comment=request.data.get("comment"),
+                    updated_by=request.user if request.user.is_authenticated else None
+                )
+                
+            # Update balance if needed
+            if store.balance == 0:
+                store.balance = new_budget
+                store.save(update_fields=['balance'])
+
+            return CustomResponse(True, "Budget updated successfully", 200, serializer.data)
+
+        return CustomResponse(False, serializer.errors, 400)
+

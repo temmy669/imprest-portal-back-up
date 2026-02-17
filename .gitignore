@@ -60,3 +60,10 @@ todo.txt
 media/
 *.zip
 .*DS_Store
+
+#dirs
+receipts/
+JUNK/
+
+create_bank.py
+test_receipt_validation.py

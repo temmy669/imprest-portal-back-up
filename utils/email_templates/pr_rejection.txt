@@ -1,0 +1,28 @@
+Purchase Request Declined
+
+Dear {{ requester_name }},
+
+Your purchase request {{ request_id }} for the following items has been declined:
+
+Items:
+{% for item in items %}
+- Item: {{ item.expense_item }}
+  GL Code: {{ item.gl_code }}
+  Quantity: {{ item.quantity }}
+  Unit Price: ₦{{ item.unit_price|floatformat:2 }}
+  Total Price: ₦{{ item.total_price|floatformat:2 }}
+{% endfor %}
+
+Reason for Decline:
+{{ rejection_reason }}
+- {{ rejector_name }}, {{ rejection_date }}
+
+Request Details:
+- Store: {{ store_name }}
+- Total Amount: {{ total_amount }}
+- Submitted Date: {{ request_date }}
+
+You may resubmit this request after making the necessary corrections.
+
+This is an automated notification. Please do not reply.
+© {% now "Y" %} {{ company_name }}

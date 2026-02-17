@@ -1,0 +1,20 @@
+Reimbursement Request Approved
+
+Dear {{ requester_name }},
+
+Your reimbursement request {{ request_id }} has been approved.
+
+Request Details:
+Store: {{ store_name }} ({{ store_code }})
+Total Amount: {{ total_amount }}
+Approved By: {{ area_manager_approvedby_name }}
+Approval Date: {{ area_manager_approval_date }}
+
+Items Approved:
+Item | GL Code | Qty | Unit Price | Total
+{% for item in items %}
+{{ item.expense_item }} | {{ item.gl_code }} | {{ item.quantity }} | {{ item.status }} | ₦{{ item.unit_price|floatformat:2 }} | ₦{{ item.item_total|floatformat:2 }}
+{% endfor %}
+
+This is an automated notification. Please do not reply.
+© {% now "Y" %} {{ company_name }}

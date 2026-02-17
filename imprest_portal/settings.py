@@ -14,13 +14,17 @@ from pathlib import Path
 from decouple import config
 import os, random, string
 from datetime import timedelta
+import cloudinary
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Environment mode
-ENVIRONMENT = config('DJANGO_ENV', default='development')
+ENVIRONMENT = config('ENVIROMENT', default='development')
 
+SAP_URL = config('SAP_URL', default='http://localhost/')
+SAP_TOKEN_USERNAME = config('SAP_TOKEN_USERNAME', default='sap_user')
+SAP_TOKEN_PASSWORD = config('SAP_TOKEN_PASSWORD', default='sap_password')
 
 
 # Quick-start development settings - unsuitable for production
@@ -49,16 +53,22 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-
+    
+    
     # Third party apps
     'drf_spectacular',
     'rest_framework',
+    'corsheaders',
 
     # Local apps
-    'users.apps.usersConfig',
+    'users.apps.UsersConfig',
     'roles.apps.RolesConfig',
     'stores.apps.StoresConfig',
     'purchases.apps.PurchasesConfig',
+    'helpers.apps.HelpersConfig',
+    'reimbursements.apps.ReimbursementsConfig',
+    'expenseitems.apps.ExpenseitemsConfig',
+    'banks.apps.BanksConfig',
 ]
 
 AUTH_USER_MODEL = 'users.User'
@@ -66,6 +76,7 @@ AUTH_USER_MODEL = 'users.User'
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    "corsheaders.middleware.CorsMiddleware",
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -95,17 +106,21 @@ AZURE_AD_LOGOUT_URL = f"{AZURE_AD_AUTHORITY}/oauth2/v2.0/logout?post_logout_redi
 
 # CORS settings based on environment
 # if DEBUG:
-#     CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_CREDENTIALS = True
 # else:
-#     CORS_ALLOWED_ORIGINS = [
-#         "https://172.16.0.95",
-#         "https://calloverapp.wajesmarthrms.website",
-#     ]
+CORS_ALLOWED_ORIGINS = [
+
+         "http://localhost:5173",
+         "http://localhost:3000",
+         "https://foodconcept-imprest-portal.wajesmarthrms.website",
+
+    ]
 
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'utils' / 'email_templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -119,8 +134,39 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'imprest_portal.wsgi.application'
 
-DB_ENGINE = config('DB_ENGINE', default='postgresql')
-USE_SSL = config('DB_USE_SSL', default='False', cast=bool)
+# Session timeout and persistence
+SESSION_COOKIE_AGE = 3600  # 1 hour in seconds
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # Keep session alive even after browser is closed
+ 
+# Secure session cookies
+SESSION_COOKIE_SECURE = ENVIRONMENT == 'production'
+SESSION_COOKIE_SAMESITE = 'None'
+ 
+SESSION_COOKIE_HTTPONLY = True  # Prevents client-side scripts from accessing cookies
+ 
+# Optional: Clear expired sessions
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+
+if ENVIRONMENT == "production":
+    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+    
+    CLOUDINARY_STORAGE = {
+        'CLOUD_NAME': config('CLOUDINARY_CLOUD_NAME'),
+        'API_KEY': config('CLOUDINARY_API_KEY'),
+        'API_SECRET': config('CLOUDINARY_API_SECRET'),
+    }
+
+    cloudinary.config(
+        cloud_name=CLOUDINARY_STORAGE['CLOUD_NAME'],
+        api_key=CLOUDINARY_STORAGE['API_KEY'],
+        api_secret=CLOUDINARY_STORAGE['API_SECRET'],
+        secure=True
+    )
+else:
+    MEDIA_URL = '/media/'
+    MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+
 
 # Database configuration
 
@@ -142,16 +188,16 @@ DATABASES = {
 }
 
 
-if ENVIRONMENT == 'production':
-    DATABASES['default'] = {
-        'ENGINE': 'django.db.backends.mssql',
-        'NAME': config('DB_NAME', default='prod_database'),
-        'USER': config('DB_USER', default='prod_user'),
-        'PASSWORD': config('DB_PASSWORD', default='prod_password'),
-        'HOST': config('DB_HOST', default='prod_server'),
-        'PORT': config('DB_PORT', default='1433'),
-        'OPTIONS': {'driver': 'ODBC Driver 17 for SQL Server'},
-    }
+# if ENVIRONMENT == 'production':
+#     DATABASES['default'] = {
+#         'ENGINE': 'django.db.backends.mssql',
+#         'NAME': config('DB_NAME', default='prod_database'),
+#         'USER': config('DB_USER', default='prod_user'),
+#         'PASSWORD': config('DB_PASSWORD', default='prod_password'),
+#         'HOST': config('DB_HOST', default='prod_server'),
+#         'PORT': config('DB_PORT', default='1433'),
+#         'OPTIONS': {'driver': 'ODBC Driver 17 for SQL Server'},
+#     }
 
     
 # Password validation
@@ -196,8 +242,8 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=120),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'ALGORITHM': 'HS256',
@@ -212,9 +258,13 @@ SIMPLE_JWT = {
 #REST_FRAMEWORK SETTINGS
 REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': (
-        'rest_framework.renderers.JSONRenderer',  # Enforce JSON-only responses
+        'rest_framework.renderers.JSONRenderer',  
+         'rest_framework.renderers.BrowsableAPIRenderer'
+        
     ),
-    
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 10,
+    'EXCEPTION_HANDLER': 'helpers.error_handler.custom_exception_handler',
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
@@ -222,15 +272,18 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
-#Email settings
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 465
-EMAIL_USE_TLS = False
-EMAIL_USE_SSL = True
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='your_host_user')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='your_app_password')# Use an App Password, not your real password
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL')
+EMAIL_BACKEND = config("EMAIL_BACKEND")
+EMAIL_HOST = config("EMAIL_HOST")
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD")
+EMAIL_HOST_USER = config("EMAIL_HOST_USER")
+EMAIL_PORT = config("EMAIL_PORT")
+# EMAIL_USE_TLS = config('EMAIL_USE_TLS')
+EMAIL_USE_SSL = config("EMAIL_USE_SSL")
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL")
+COMPANY_NAME = config("COMPANY_NAME")
+
+# Google Gemini API Key
+GEMINI_API_KEY = config('GEMINI_API_KEY')
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'IMPREST PORTAL API DOCUMENTATION',
