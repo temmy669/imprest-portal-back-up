@@ -565,7 +565,7 @@ class BulkApproveDeclineView(APIView):
         try:
             reimbursement_ids = request.data.get("reimbursement_ids", [])
             action = request.query_params.get("action", None)
-        
+            print("action ==> ", action)
             if not reimbursement_ids:
                 return CustomResponse(
                     status=400,
@@ -577,7 +577,7 @@ class BulkApproveDeclineView(APIView):
                 return CustomResponse(
                     status=400,
                     valid=False,
-                    msg=f"Action is required. action can be `approve` or `decline`"
+                    msg=f"Action is required. action must be either `approve` or `decline`"
                 )
 
             if not action in ["approve", "decline"]:
@@ -588,52 +588,80 @@ class BulkApproveDeclineView(APIView):
                 )
             
             user = request.user
+           
             reimbursements = self.queryset.filter(id__in=reimbursement_ids)
             reimbursements_array =[]
             reimbursement_items_array = []
 
+            # check if any reimbursement exists for the specified IDs
             if reimbursements.exists():
                 user_role = user.role.name
-
+                print("user role ==> ", user_role)
                 if user_role == Role.Type.AREA_MANAGER:
                     for reimbursement in reimbursements:
-                        reimbursement.area_manager=user,
+                        reimbursement.status = "approved" if action == "approve" else "declined"
+                        reimbursement.area_manager=user
                         reimbursement.area_manager_approved_at=timezone.now() if action == "approve" else None
                         reimbursement.area_manager_declined_at=timezone.now() if action == "decline" else None
                         reimbursements_array.append(reimbursement)
 
                         for reimbursement_item in reimbursement.items.all():
-                            reimbursement_item.area_manager=user,
-                            reimbursement_item.area_manager_approved_at=timezone.now() if action == "approve" else None
-                            reimbursement_item.area_manager_declined_at=timezone.now() if action == "decline" else None
+                            reimbursement_item.status = "approved" if action == "approve" else "declined"
                             reimbursement_items_array.append(reimbursement_item)
 
                 elif user_role == Role.Type.INTERNAL_CONTROL:
+                    print("internal control ", user)
                     for reimbursement in reimbursements:
-                        reimbursement.internal_control=user,
+                        reimbursement.status="pending" if action == "decline" else reimbursement.status
+                        reimbursement.internal_control=user
                         reimbursement.internal_control_status = "approved" if action == "approve" else "decline"
                         reimbursement.internal_control_approved_at=timezone.now() if action == "approve" else None
                         reimbursement.internal_control_declined_at=timezone.now() if action == "decline" else None
                         reimbursements_array.append(reimbursement)
-
+                        print("reimbursement =>", reimbursement)
                         for reimbursement_item in reimbursement.items.all():
-                            reimbursement_item.internal_contro=user,
-                            reimbursement_item.internal_control_approved_at=timezone.now() if action == "approve" else None
-                            reimbursement_item.internal_control_declined_at=timezone.now() if action == "decline" else None
+                            reimbursement.status="pending" if action == "decline" else reimbursement.status
+                            reimbursement_item.internal_control_status= "approved" if action == "approve" else "decline"
                             reimbursement_items_array.append(reimbursement_item)
+                            print("item ==> ", reimbursement_item)
                 else:
                     return CustomResponse(
                         valid=False,
                         msg=f"You are not authorized to perform this action",
                         status=403
                     )
+                # define internal control fields
+                internal_control_fiels = [
+                    "status",
+                    "internal_control",
+                    "internal_control_status",
+                    "internal_control_approved_at",
+                    "internal_control_declined_at"]
+                # define area manager's fields
+                area_manager_fields = [
+                    "status",
+                    "area_manager",
+                    "area_manager_approved_at",
+                    "area_manager_declined_at"]
+                
+                # Check fields to update
+                fields_to_update = area_manager_fields if user_role == Role.Type.AREA_MANAGER else internal_control_fiels
 
+                # Ensure the database is in a consistent state in event of 
+                # any update failure.
                 with transaction.atomic():
-                    Reimbursement.objects.bulk_create(reimbursements_array, batch_size=200)
-                    ReimbursementItem.objects.bulk_create(reimbursement_items_array, batch_size=200)
+                    print("bulk updating... ", reimbursements_array)
+                    Reimbursement.objects.bulk_update(reimbursements_array, 
+                                                      fields=fields_to_update,
+                                                      batch_size=200)
+                    print("bulk updating items...", reimbursement_items_array)
+                    ReimbursementItem.objects.bulk_update(reimbursement_items_array, 
+                                                          fields=["status","internal_control_status"],
+                                                          batch_size=200)
+                    print("done bulk updating... ")
                     return CustomResponse(
                         valid=True,
-                        msg=f"{len(reimbursements_array)} reimbursements successfully approved.",
+                        msg=f"""{len(reimbursements_array)} reimbursements successfully {"approved" if action == "approve" else "declined"}""",
                         status=200
                     )
 
