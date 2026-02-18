@@ -15,6 +15,12 @@ class Permission(models.Model):
 
 
 class Role(models.Model):
+    class Type(models.TextChoices):
+        ADMIN="Admin"
+        RESTAURANT_MANAGER="Restaurant Manager"
+        AREA_MANAGER="Area Manager"
+        INTERNAL_CONTROL="Internal Control"
+        TREASURER="Treasurer"
     name = models.CharField(max_length=100, unique=True)
     permissions = models.ManyToManyField(
         Permission,

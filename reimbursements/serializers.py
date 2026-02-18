@@ -94,7 +94,6 @@ class ReimbursementItemSerializer(serializers.ModelSerializer):
         return instance
 
 
-
 class ReimbursementSerializer(serializers.ModelSerializer):
     items = ReimbursementItemSerializer(many=True)
     comments = ReimbursementCommentSerializer(many=True, required=False)

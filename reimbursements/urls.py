@@ -9,6 +9,7 @@ from .views import (
     ExportReimbursement,
     DisbursemntView,
     BulkDisbursementView,
+    BulkApproveDeclineView
 
 )   
 from django.conf import settings
@@ -27,6 +28,7 @@ urlpatterns = [
     path('reimbursements/<int:pk>/items/<int:item_id>/approve/', ApproveReimbursementItemView.as_view(), name='approve-reimbursement-item'),
     # Decline entire reimbursement request
     path('reimbursements/<int:pk>/decline/', DeclineReimbursementView.as_view(), name='decline-reimbursement'),
+    path('reimbursements/bulk-update/', BulkApproveDeclineView.as_view(), name="bulk-update"),
     # Decline individual reimbursement item
     path('reimbursements/<int:pk>/items/<int:item_id>/decline/', DeclineReimbursementItemView.as_view(), name='decline-reimbursement-item'),
     # export reimbursements

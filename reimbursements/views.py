@@ -2,7 +2,8 @@ from collections import Counter
 from rest_framework.generics import get_object_or_404
 from utils.pagination import DynamicPageSizePagination
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.generics import ListAPIView
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from .models import *
 from .serializers import *
 from purchases.models import PurchaseRequest, LimitConfig, PurchaseRequestItem
@@ -38,7 +39,7 @@ import re
 from utils.receipt_validation import validate_receipt
 from django.db import transaction
 from utils.email_utils import send_reimbursement_rejection_notification, send_reimbursement_approval_notification
-
+from roles.models import Role
 
 class ReimbursementRequestView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
@@ -551,6 +552,92 @@ class DeclineReimbursementView(APIView):
             },
             200
         )
+    
+class BulkApproveDeclineView(APIView):
+    """Bulk approve or decline reimbursements. """
+    
+    queryset = Reimbursement.objects.all()
+    serializer_class = ReimbursementSerializer
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthenticationFromCookie]
+
+    def post(self, request):
+        try:
+            reimbursement_ids = request.data.get("reimbursements")
+            action = request.query_params.get("action", None)
+            if not action:
+                return CustomResponse(
+                    status=400,
+                    valid=False,
+                    msg=f"Action is required. action can be `approve` or `decline`"
+                )
+
+            if not action in ["approve", "decline"]:
+                return CustomResponse(
+                    status=400,
+                    valid=False,
+                    msg=f"Invalid action: {action}"
+                )
+            user = request.user
+            reimbursements = self.queryset.filter(id__in=reimbursement_ids)
+            reimbursements_array =[]
+            reimbursement_items_array = []
+
+            if reimbursements.exists():
+                user_role = user.role.name
+
+                if user_role == Role.Type.AREA_MANAGER:
+                    for reimbursement in reimbursements:
+                        reimbursement.area_manager=user,
+                        reimbursement.area_manager_approved_at=timezone.now() if action == "approve" else None
+                        reimbursement.area_manager_declined_at=timezone.now() if action == "decline" else None
+                        reimbursements_array.append(reimbursement)
+
+                        for reimbursement_item in reimbursement.items.all():
+                            reimbursement_item.area_manager=user,
+                            reimbursement_item.area_manager_approved_at=timezone.now() if action == "approve" else None
+                            reimbursement_item.area_manager_declined_at=timezone.now() if action == "decline" else None
+                            reimbursement_items_array.append(reimbursement_item)
+
+                elif user_role == Role.Type.INTERNAL_CONTROL:
+                    for reimbursement in reimbursements:
+                        reimbursement.internal_control=user,
+                        reimbursement.internal_control_status = "approved" if action == "approve" else "decline"
+                        reimbursement.internal_control_approved_at=timezone.now() if action == "approve" else None
+                        reimbursement.internal_control_declined_at=timezone.now() if action == "decline" else None
+                        reimbursements_array.append(reimbursement)
+
+                        for reimbursement_item in reimbursement.items.all():
+                            reimbursement_item.internal_contro=user,
+                            reimbursement_item.internal_control_approved_at=timezone.now() if action == "approve" else None
+                            reimbursement_item.internal_control_declined_at=timezone.now() if action == "decline" else None
+                            reimbursement_items_array.append(reimbursement_item)
+
+                with transaction.atomic():
+                    Reimbursement.objects.bulk_create(reimbursements_array, batch_size=200)
+                    ReimbursementItem.objects.bulk_create(reimbursement_items_array, batch_size=200)
+                    return CustomResponse(
+                        valid=True,
+                        msg=f"{len(reimbursements_array)} reimbursements successfully approved.",
+                        status=200
+                    )
+
+            else:
+                return CustomResponse(
+                    valid=False,
+                    msg="Reimbursements do not exist",
+                    status=400
+                )
+                
+        except Exception as err:
+            return CustomResponse(
+                valid=False,
+                msg=f"Unable to {action} reimbursement",
+                data={
+                    "error":str(err)
+                }
+            )
+
 
 class DeclineReimbursementItemView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
