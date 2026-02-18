@@ -555,7 +555,7 @@ class DeclineReimbursementView(APIView):
     
 class BulkApproveDeclineView(APIView):
     """Bulk approve or decline reimbursements. """
-    
+
     queryset = Reimbursement.objects.all()
     serializer_class = ReimbursementSerializer
     permission_classes = [IsAuthenticated]
@@ -563,8 +563,16 @@ class BulkApproveDeclineView(APIView):
 
     def post(self, request):
         try:
-            reimbursement_ids = request.data.get("reimbursements")
+            reimbursement_ids = request.data.get("reimbursement_ids", [])
             action = request.query_params.get("action", None)
+        
+            if not reimbursement_ids:
+                return CustomResponse(
+                    status=400,
+                    valid=False,
+                    msg=f"No Reimbursements selected for bulk update."
+                )
+
             if not action:
                 return CustomResponse(
                     status=400,
@@ -578,6 +586,7 @@ class BulkApproveDeclineView(APIView):
                     valid=False,
                     msg=f"Invalid action: {action}"
                 )
+            
             user = request.user
             reimbursements = self.queryset.filter(id__in=reimbursement_ids)
             reimbursements_array =[]
@@ -612,6 +621,12 @@ class BulkApproveDeclineView(APIView):
                             reimbursement_item.internal_control_approved_at=timezone.now() if action == "approve" else None
                             reimbursement_item.internal_control_declined_at=timezone.now() if action == "decline" else None
                             reimbursement_items_array.append(reimbursement_item)
+                else:
+                    return CustomResponse(
+                        valid=False,
+                        msg=f"You are not authorized to perform this action",
+                        status=403
+                    )
 
                 with transaction.atomic():
                     Reimbursement.objects.bulk_create(reimbursements_array, batch_size=200)
