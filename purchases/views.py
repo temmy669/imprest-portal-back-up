@@ -19,7 +19,7 @@ from django.http import HttpResponse
 from collections import Counter
 from datetime import datetime
 from django.db.models import Q
-from utils.email_utils import send_rejection_notification, send_approval_notification
+from utils.email_utils import send_rejection_notification, send_approval_notification, send_creation_notification
 from django.db import transaction
 
 class PurchaseRequestView(APIView):
@@ -109,7 +109,7 @@ class PurchaseRequestView(APIView):
                     requester=request.user,
                     total_amount=total_amount
                 )
-
+                send_creation_notification(purchase_request)
                 return CustomResponse(True, "Purchase Request Created Successfully", 201, serializer.data)
             return CustomResponse(False, serializer.errors)
         except Exception as err:

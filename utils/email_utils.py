@@ -92,7 +92,9 @@ def send_creation_notification(purchase_request):
     """
     try:
         #get the store area manager for the purchase request
-        area_manager = purchase_request.area_manager if purchase_request.area_manager else None
+        store = purchase_request.store
+        print("Area Manager ==> ", store.area_manager)
+        area_manager = store.area_manager if store.area_manager else None
         if area_manager:
             context = {
                 'request_id': f"PR-{purchase_request.id:04d}",
@@ -107,7 +109,6 @@ def send_creation_notification(purchase_request):
           
             html_message = render_to_string('pr_creation.html', context)
             plain_message = strip_tags(html_message)
-            
             send_mail(
                 subject=f"Purchase Request Created - {context['request_id']}",
                 message=plain_message,
