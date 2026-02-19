@@ -832,7 +832,7 @@ class ExportReimbursement(APIView):
 
         headers = ["Staff Name"] + expense_types + ["Total"]
         sheet.append(headers)
-        
+
         data = defaultdict(lambda: defaultdict(Decimal))
 
         for rr in queryset:
@@ -852,13 +852,13 @@ class ExportReimbursement(APIView):
             f"IC_reimbursements_{start_date.date()}_{end_date.date()}.xlsx"
         )
 
-    def export_treasury(self, queryset, start_date, end_date):
+    def export_treasury(self, queryset:Reimbursement, start_date, end_date):
         from collections import defaultdict
         workbook = openpyxl.Workbook()
         sheet = workbook.active
         sheet.title = "Treasury"
 
-        treasurer_columns = [
+        treasurer_headers = [
             "Request ID",
             "Requester",
             "Region",
@@ -873,21 +873,35 @@ class ExportReimbursement(APIView):
             "Bank GL Code"
         ]
 
-        headers = ["Store", "Region", "Total Amount"]
+        # headers = ["Store", "Region", "Total Amount"]
 
-        sheet.append(headers)
+        sheet.append(treasurer_headers)
+
         store_headers ={
+            "request_id":"",
+            "requester":"",
             "region":"",
-            "total":0.0,
+            "store":"",
+            "store_code":"",
+            "expense_item":"",
+            "area_manager":"",
+            "amount":0.0,
             "status":"",
-            ""
+            "date_created":"",
+            "bank_account":"",
+            "bank_gl_code":""
         }
         stores = defaultdict(lambda: {"region": "", "amount": 0})
 
+        print("stores", stores)
+
         for rr in queryset:
             store = rr.store.name
+            stores[store]["requester_id"] = rr.requester.pk
+            stores[store]["requester"] = rr.requester.get_full_name()
             stores[store]["region"] = rr.store.region.name if rr.store.region else ""
             stores[store]["amount"] += rr.total_amount
+            stores
 
         for store, data in stores.items():
             sheet.append([store, data["region"], data["total"]])
