@@ -808,23 +808,21 @@ class ExportReimbursement(APIView):
 
     def export_internal_control(self, queryset, start_date, end_date):
         from collections import defaultdict
-        treasurer_columns = [
-            "Request ID",
-            "Requester",
-            "Region",
-            "Store",
-            "Store Code",
-            "Expense Item",
-            "Area Manager",
-            "Amount",
-            "Status",
-            "Date Created",
-            "Bank Account",
-            "Bank GL Code"
-        ]
         workbook = openpyxl.Workbook()
         sheet = workbook.active
         sheet.title = "Internal Control"
+
+        internal_control_columns=[
+            "Request ID",
+            "Requester",
+            "Store",
+            "Store Code",
+            "Store Manager",
+            "Expense Item",
+            "Amount"
+            "Status"
+            "Date Created"
+        ]
 
         expense_types = sorted({
             item.item_name
@@ -860,15 +858,36 @@ class ExportReimbursement(APIView):
         sheet = workbook.active
         sheet.title = "Treasury"
 
-        headers = ["Store", "Region", "Total Amount"]
-        sheet.append(headers)
+        treasurer_columns = [
+            "Request ID",
+            "Requester",
+            "Region",
+            "Store",
+            "Store Code",
+            "Expense Item",
+            "Area Manager",
+            "Amount",
+            "Status",
+            "Date Created",
+            "Bank Account",
+            "Bank GL Code"
+        ]
 
-        stores = defaultdict(lambda: {"region": "", "total": 0})
+        headers = ["Store", "Region", "Total Amount"]
+
+        sheet.append(headers)
+        store_headers ={
+            "region":"",
+            "total":0.0,
+            "status":"",
+            ""
+        }
+        stores = defaultdict(lambda: {"region": "", "amount": 0})
 
         for rr in queryset:
             store = rr.store.name
             stores[store]["region"] = rr.store.region.name if rr.store.region else ""
-            stores[store]["total"] += rr.total_amount
+            stores[store]["amount"] += rr.total_amount
 
         for store, data in stores.items():
             sheet.append([store, data["region"], data["total"]])
