@@ -19,6 +19,7 @@ class Store(models.Model):
     code = models.CharField(max_length=20, unique=True)
     region = models.ForeignKey(Region, on_delete=models.PROTECT, related_name='region_stores')
     budget = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+    balance = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)  # track when store created
     updated_at = models.DateTimeField(auto_now=True)      # track last modified
     is_active = models.BooleanField(default=True)
