@@ -92,6 +92,7 @@ def send_creation_notification(purchase_request):
     """
     try:
         #get the store area manager for the purchase request
+        print("sending email notification ...")
         store = purchase_request.store
         print("Area Manager ==> ", store.area_manager)
         area_manager = store.area_manager if store.area_manager else None
@@ -113,7 +114,7 @@ def send_creation_notification(purchase_request):
                 subject=f"Purchase Request Created - {context['request_id']}",
                 message=plain_message,
                 from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[purchase_request.area_manager.email],
+                recipient_list=[area_manager.email],
                 html_message=html_message
             )
     except Exception as err:
