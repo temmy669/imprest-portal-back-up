@@ -51,8 +51,8 @@ class Store(models.Model):
             self.balance = self.budget
         super().save(*args, **kwargs)
 
-    @cached_property
-    def balance(self):
+    # @cached_property
+    def get_balance(self):
         """Get the entire balance of the store."""
         approved_expenses = self.reimbursements.filter(internal_control_status='approved')
         total_approved = approved_expenses.aggregate(total=models.Sum('total_amount'))['total']
