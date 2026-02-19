@@ -776,7 +776,6 @@ class ExportReimbursement(APIView):
     #Helper methods called by the export view
     def get_queryset(self, user, start_date, end_date, status):
         qs = Reimbursement.objects.all()
-
         if user.role.name == "Area Manager":
             return qs.filter(
                 store__in=user.assigned_stores.all(),
