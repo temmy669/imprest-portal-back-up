@@ -148,7 +148,13 @@ class DashboardView(APIView):
             # in the context of ISO week numbering, so we set it to 1.
             week_in_month = 1 
 
-        return week_in_month
+        return 
+    
+
+    def current_month_week_number(self) -> int:
+        """Returns the week number (1–5 or 1–6) of the current month"""
+        today = datetime.now()
+        return ((today.day - 1) // 7) + 1
         
 
     def get(self, request):
@@ -170,7 +176,7 @@ class DashboardView(APIView):
         print("Stores", stores.values_list("id"))
 
         # --- Calculate Weekly Period ---
-        print("Current Week Number ==> ", self._get_current_week_month())
+        print("Current Week Number ==> ", self.current_month_week_number())
         if week_number:
             # Specific week requested
             try:
@@ -178,13 +184,13 @@ class DashboardView(APIView):
                 week_start, week_end = self._get_week_range(year, month, week_num)
             except:
                 # Fallback to current accounting period
-                week_start, week_end = self._get_week_range(year, month, self._get_current_week_month())
+                week_start, week_end = self._get_week_range(year, month, self.current_month_week_number())
         else:
             # If no week number is specified, get the number of the current week
             # if multiple store is selected, use current week to get the week start and end dates
             # week_start = self._get_current_accounting_period(stores)
             # week_end = week_start + timedelta(days=6, hours=23, minutes=59, seconds=59)
-            week_start, week_end = self._get_week_range(year, month, self._get_current_week_month())
+            week_start, week_end = self._get_week_range(year, month, self.current_month_week_number())
 
         # --- Set date range for month ---
         start_month = timezone.make_aware(datetime(year, month, 1))
@@ -313,7 +319,7 @@ class DashboardView(APIView):
                 # "selected_store": int(store_param) if store_param else None,
                 "selected_year": year,
                 "selected_month": month,
-                "selected_week": int(week_number) if week_number else self._get_current_week_month(),
+                "selected_week": int(week_number) if week_number else self.current_month_week_number(),
                 # "available_weeks": available_weeks,
                 "week_period": {
                     "start": week_start.strftime("%Y-%m-%d"),

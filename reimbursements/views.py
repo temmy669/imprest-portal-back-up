@@ -834,6 +834,7 @@ class ExportReimbursement(APIView):
         # headers = ["Staff Name"] + expense_types + ["Total"]
         sheet.append(internal_control_headers)
         book=[]
+
         for rr in queryset:
             store = rr.store
             store_name = store.name
@@ -849,10 +850,9 @@ class ExportReimbursement(APIView):
                 rr.internal_control_status,
                 rr.created_at.strftime("%d-%m-%Y")
             ]
-            print("row", row)
+        
             sheet.append(row)
-            book.append(row)
-        print("excel book rows", book)
+     
         return self.build_response(
             workbook,
             f"IC_reimbursements_{start_date.date()}_{end_date.date()}.xlsx"
