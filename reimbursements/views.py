@@ -808,6 +808,21 @@ class ExportReimbursement(APIView):
 
     def export_internal_control(self, queryset, start_date, end_date):
         from collections import defaultdict
+
+        columns = [
+            "Request ID",
+            "Requester",
+            "Region",
+            "Store",
+            "Store Code",
+            "Expense Item",
+            "Area Manager",
+            "Amount",
+            "Status",
+            "Date Created",
+            "Bank Account",
+            "Bank GL Code"
+        ]
         workbook = openpyxl.Workbook()
         sheet = workbook.active
         sheet.title = "Internal Control"
