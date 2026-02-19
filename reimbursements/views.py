@@ -874,37 +874,26 @@ class ExportReimbursement(APIView):
         ]
 
         # headers = ["Store", "Region", "Total Amount"]
-
+        print("headers ==> ", treasurer_headers)
         sheet.append(treasurer_headers)
-
-        store_headers ={
-            "request_id":"",
-            "requester":"",
-            "region":"",
-            "store":"",
-            "store_code":"",
-            "expense_item":"",
-            "area_manager":"",
-            "amount":0.0,
-            "status":"",
-            "date_created":"",
-            "bank_account":"",
-            "bank_gl_code":""
-        }
-        stores = defaultdict(lambda: {"region": "", "amount": 0})
-
-        print("stores", stores)
-
-        for rr in queryset:
-            store = rr.store.name
-            stores[store]["requester_id"] = rr.requester.pk
-            stores[store]["requester"] = rr.requester.get_full_name()
-            stores[store]["region"] = rr.store.region.name if rr.store.region else ""
-            stores[store]["amount"] += rr.total_amount
-            stores
-
-        for store, data in stores.items():
-            sheet.append([store, data["region"], data["total"]])
+        for rr in Reimbursement.objects.all()[:10]:
+            store = rr.store
+            store_name = store.name
+            row = [
+                f"RR-{rr.id:04d}",
+                rr.requester.get_full_name(),
+                store.region.name if rr.store.region else "",
+                store_name,
+                store.code,
+                ",".join(rr.items.values_list("item_name", flat=True)),
+                store.area_manager.get_full_name() if store.area_manager else "Unknown",
+                float(rr.total_amount),
+                rr.created_at.strftime("%d-%m-%Y"),
+                rr.bank.bank_name if rr.bank else "Unknown",
+                rr.bank.gl_code if rr.bank else "Unknown"
+            ]
+            print("row ==> ", row)
+            sheet.append(row)
 
         return self.build_response(
             workbook,
