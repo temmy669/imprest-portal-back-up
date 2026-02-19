@@ -873,8 +873,6 @@ class ExportReimbursement(APIView):
             "Bank GL Code"
         ]
 
-        # headers = ["Store", "Region", "Total Amount"]
-        print("headers ==> ", treasurer_headers)
         sheet.append(treasurer_headers)
         for rr in Reimbursement.objects.all()[:10]:
             store = rr.store
@@ -892,7 +890,7 @@ class ExportReimbursement(APIView):
                 rr.bank.bank_name if rr.bank else "Unknown",
                 rr.bank.gl_code if rr.bank else "Unknown"
             ]
-            print("row ==> ", row)
+          
             sheet.append(row)
 
         return self.build_response(
