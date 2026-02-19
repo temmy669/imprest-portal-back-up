@@ -110,6 +110,7 @@ def send_creation_notification(purchase_request):
           
             html_message = render_to_string('pr_creation.html', context)
             plain_message = strip_tags(html_message)
+
             send_mail(
                 subject=f"Purchase Request Created - {context['request_id']}",
                 message=plain_message,
@@ -117,9 +118,9 @@ def send_creation_notification(purchase_request):
                 recipient_list=[area_manager.email],
                 html_message=html_message
             )
+
     except Exception as err:
         logger.error(err)
-        raise 
     
 def send_reimbursement_creation_notification(reimbursement):
     """

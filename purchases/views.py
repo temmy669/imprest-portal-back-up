@@ -109,7 +109,11 @@ class PurchaseRequestView(APIView):
                     requester=request.user,
                     total_amount=total_amount
                 )
-                send_creation_notification(purchase_request)
+                try:
+                    send_creation_notification(purchase_request)
+                except Exception as err:
+                    print(f"failed to send PR creation email: {err}")
+                    pass
                 return CustomResponse(True, "Purchase Request Created Successfully", 201, serializer.data)
             return CustomResponse(False, serializer.errors)
         except Exception as err:
