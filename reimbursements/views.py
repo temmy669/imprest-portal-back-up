@@ -776,6 +776,7 @@ class ExportReimbursement(APIView):
     #Helper methods called by the export view
     def get_queryset(self, user, start_date, end_date, status):
         qs = Reimbursement.objects.all()
+        
         if user.role.name == "Area Manager":
             return qs.filter(
                 store__in=user.assigned_stores.all(),
@@ -807,12 +808,12 @@ class ExportReimbursement(APIView):
         return None
 
     def export_internal_control(self, queryset, start_date, end_date):
-        from collections import defaultdict
+    
         workbook = openpyxl.Workbook()
         sheet = workbook.active
         sheet.title = "Internal Control"
 
-        internal_control_columns=[
+        internal_control_headers=[
             "Request ID",
             "Requester",
             "Store",
@@ -824,29 +825,32 @@ class ExportReimbursement(APIView):
             "Date Created"
         ]
 
-        expense_types = sorted({
-            item.item_name
-            for rr in queryset
-            for item in rr.items.all()
-        })
+        # expense_types = sorted({
+        #     item.item_name
+        #     for rr in queryset
+        #     for item in rr.items.all()
+        # })
 
-        headers = ["Staff Name"] + expense_types + ["Total"]
-        sheet.append(headers)
-
-        data = defaultdict(lambda: defaultdict(Decimal))
+        # headers = ["Staff Name"] + expense_types + ["Total"]
+        sheet.append(internal_control_headers)
 
         for rr in queryset:
-            name = f"{rr.requester.first_name} {rr.requester.last_name}"
-
-            for item in rr.items.all():
-                data[name][item.item_name] += item.item_total
-
-            data[name]["Total"] += rr.total_amount
-
-        for name, expenses in data.items():
-            row = [name] + [expenses.get(h, 0) for h in expense_types] + [expenses["Total"]]
+            store = rr.store
+            store_name = store.name
+            
+            row = [
+                f"RR-{rr.id:04d}",
+                rr.requester.get_full_name(),
+                store_name,
+                store.code,
+                store.area_manager.get_full_name() if store.area_manager else "Unknown",
+                ",".join(rr.items.values_list("item_name", flat=True)),
+                float(rr.total_amount),
+                rr.status,
+                rr.created_at.strftime("%d-%m-%Y")
+            ]
+          
             sheet.append(row)
-
         return self.build_response(
             workbook,
             f"IC_reimbursements_{start_date.date()}_{end_date.date()}.xlsx"
@@ -874,9 +878,11 @@ class ExportReimbursement(APIView):
         ]
 
         sheet.append(treasurer_headers)
-        for rr in Reimbursement.objects.all()[:10]:
+
+        for rr in queryset:
             store = rr.store
             store_name = store.name
+
             row = [
                 f"RR-{rr.id:04d}",
                 rr.requester.get_full_name(),
@@ -886,6 +892,7 @@ class ExportReimbursement(APIView):
                 ",".join(rr.items.values_list("item_name", flat=True)),
                 store.area_manager.get_full_name() if store.area_manager else "Unknown",
                 float(rr.total_amount),
+                rr.status,
                 rr.created_at.strftime("%d-%m-%Y"),
                 rr.bank.bank_name if rr.bank else "Unknown",
                 rr.bank.gl_code if rr.bank else "Unknown"
