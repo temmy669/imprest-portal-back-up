@@ -274,7 +274,6 @@ class UserView(APIView):
     def put(self, request, pk):
         try:
             user = get_object_or_404(User, pk=pk)
-            
             # CRITICAL: Use partial=True for PATCH requests
             serializer = UserUpdateSerializer(user, data=request.data, partial=True)
             
@@ -282,9 +281,10 @@ class UserView(APIView):
             serializer.is_valid(raise_exception=True)
             
             serializer.save()
-            return CustomResponse(True, {
-            "User updated successfully",
-            }, 200)
+            return CustomResponse(
+                valid=True, 
+                msg="User updated successfully",
+                status=200)
         except Exception as err:
             return CustomResponse(
                 valid=False,
