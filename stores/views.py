@@ -48,7 +48,7 @@ class StoreListView(APIView):
                     # else: silently ignore bad values (you could also return 400 here)
                 except ValueError:
                     # Could return 400 Bad Request instead of silently failing
-                
+                    pass
             serializer = StoreSerializer(queryset, many=True)
             return CustomResponse(
                 valid=True,
