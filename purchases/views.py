@@ -115,7 +115,11 @@ class PurchaseRequestView(APIView):
                     print(f"failed to send PR creation email: {err}")
                     pass
                 return CustomResponse(True, "Purchase Request Created Successfully", 201, serializer.data)
-            return CustomResponse(False, serializer.errors)
+            return CustomResponse(
+                valid=False,
+                msg="Unable to create Purchase request", 
+                status=400, 
+                data=serializer.errors)
         except Exception as err:
             return CustomResponse(False, "Unable to create purchase request", 400, {"error":str(err)})
             
