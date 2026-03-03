@@ -163,17 +163,15 @@ class AssignStoresToUserView(APIView):
             stores.update(area_manager=user)
             
             return CustomResponse(
-                status=True,
+                valid=True,
+                status=200,
                 msg="Store successfully assigned"
             )
             
         except User.DoesNotExist:
-            return Response(
-                {
-                    "success": False,
-                    "error": "User not found",
-                    "detail": f"No user exists with ID {user_id}"
-                },
+            return CustomResponse(
+                valid=True,
+                msg="Unable to assign stores to User",
                 status=status.HTTP_404_NOT_FOUND
             )
 
