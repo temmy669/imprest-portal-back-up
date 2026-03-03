@@ -293,6 +293,27 @@ class UserView(APIView):
                 status=400
             )
         
+    def patch(self, request, pk):
+        try:
+            user = get_object_or_404(User, pk=pk)
+            # CRITICAL: Use partial=True for PATCH requests
+            serializer = UserUpdateSerializer(user, data=request.data, partial=True)
+            
+            # CRITICAL: Use raise_exception=True to ensure validation errors return 400
+            serializer.is_valid(raise_exception=True)
+            
+            serializer.save()
+            return CustomResponse(
+                valid=True, 
+                msg="User updated successfully",
+                status=200)
+        except Exception as err:
+            return CustomResponse(
+                valid=False,
+                msg="Unable to update user",
+                status=400
+            )
+        
     def delete(self, request):
         """
         Delete an existing user.
