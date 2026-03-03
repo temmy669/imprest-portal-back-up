@@ -26,17 +26,43 @@ class StoreListView(APIView):
     - Used to populate the store dropdown in UI
     """
     def get(self, request):
-        """
-          Handles GET requests for store listing.
-        """
-        stores = Store.objects.all()
-        #filter stores by provided area managers
-        area_manager_ids = request.query_params.getlist('area_manager')
-        if area_manager_ids:
-            stores = stores.filter(area_manager__id__in=area_manager_ids)
-        serializer = StoreSerializer(stores, many=True)
-        return CustomResponse(True, "Stores returned Successfully", data=serializer.data)
-    
+        try:
+            """
+            Handles GET requests for store listing.
+            
+            Query Parameters:
+                area_manager: List of area manager IDs (integer) — optional, multiple allowed
+                            Example: ?area_manager=5&area_manager=12
+            """
+            queryset = Store.objects.all()
+            area_manager_ids = request.query_params.getlist('area_manager')
+            if area_manager_ids:
+                try:
+                    # Convert to int and filter out invalid values
+                    valid_ids = [int(pid) for pid in area_manager_ids if pid.strip().isdigit()]
+                    print("ID", area_manager_ids, valid_ids)
+                    if valid_ids:  # only filter if we have at least one valid ID
+                        queryset = queryset.filter(area_manager__id__in=valid_ids)
+                    # else: silently ignore bad values (you could also return 400 here)
+                except ValueError:
+                    # Could return 400 Bad Request instead of silently failing
+                    pass
+
+            serializer = StoreSerializer(queryset, many=True)
+            return CustomResponse(
+                valid=True,
+                status=200,
+                msg="Stores returned successfully",
+                data=serializer.data
+            )
+        except Exception as err:
+            return CustomResponse(
+                valid=False,
+                status=400,
+                msg="Unable to fetch Stores",
+                data=serializer.errors
+            )
+        
 class StoreListFromSAPView(APIView):
     """
     API endpoint for retrieving all stores from SAP.
