@@ -6,6 +6,7 @@ from helpers.exceptions import CustomValidationException
 from helpers.response import CustomResponse
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.generics import UpdateAPIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import status
 from django.views import View
@@ -306,6 +307,11 @@ class UserView(APIView):
             return CustomResponse(True,  "User deleted successfully", 200)
         except User.DoesNotExist:
             return CustomResponse(False, "User not found", 404)
+
+class UpdateUserView(UpdateAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_class = [IsAuthenticated]
     
 class SearchUserView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
