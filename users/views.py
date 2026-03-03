@@ -277,10 +277,8 @@ class UserView(APIView):
             user = get_object_or_404(User, pk=pk)
             # CRITICAL: Use partial=True for PATCH requests
             serializer = UserUpdateSerializer(user, data=request.data, partial=True)
-            
             # CRITICAL: Use raise_exception=True to ensure validation errors return 400
             serializer.is_valid(raise_exception=True)
-            
             serializer.save()
             return CustomResponse(
                 valid=True, 
