@@ -28,6 +28,7 @@ class PurchaseRequestView(APIView):
     """
     serializer_class = PurchaseRequestSerializer
     authentication_classes = [JWTAuthenticationFromCookie]
+    
     def get_permissions(self):
         if self.request.method == 'GET':
             return [IsAuthenticated(), ViewPurchaseRequest()]

@@ -36,18 +36,19 @@ class StoreListView(APIView):
             """
             queryset = Store.objects.all()
             area_manager_ids = request.query_params.getlist('area_manager')
+            print("area manager ids ==> ", area_manager_ids)
+
             if area_manager_ids:
                 try:
                     # Convert to int and filter out invalid values
-                    valid_ids = [int(pid) for pid in area_manager_ids if pid.strip().isdigit()]
+                    valid_ids = [int(pid) for pid in area_manager_ids]
                     print("ID", area_manager_ids, valid_ids)
                     if valid_ids:  # only filter if we have at least one valid ID
                         queryset = queryset.filter(area_manager__id__in=valid_ids)
                     # else: silently ignore bad values (you could also return 400 here)
                 except ValueError:
                     # Could return 400 Bad Request instead of silently failing
-                    pass
-
+                
             serializer = StoreSerializer(queryset, many=True)
             return CustomResponse(
                 valid=True,

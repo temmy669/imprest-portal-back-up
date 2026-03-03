@@ -263,15 +263,20 @@ class UserView(APIView):
    
     def post(self, request):
         """
-        Add a user to the system.
-         """
-         
-        serializer = UserSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return CustomResponse(True, "User Created successfully", data=serializer.data)
-        return CustomResponse(False, serializer.errors, 400)
-    
+            Add a user to the system.
+        """
+        try:
+            serializer = UserSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return CustomResponse(True, "User Created successfully", data=serializer.data)
+        except Exception as err:
+            return CustomResponse(
+                valid=False, 
+                msg="Unable to onboard User", 
+                status=400,
+                data=serializer.errors)
+        
     def put(self, request, pk):
         try:
             user = get_object_or_404(User, pk=pk)
