@@ -111,7 +111,6 @@ class ListExpenseItemsView(APIView):
             size=request.query_params.get("size")
             search=request.query_params.get("search")
             expense_items = byd.get_expense_items(page=page, size=size, search=search)
-            print("expense items ==> ", expense_items)
             return CustomResponse(
                 valid=True,
                 msg="Expense Items retrieved successfully", 
