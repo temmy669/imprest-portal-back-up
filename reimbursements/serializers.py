@@ -13,9 +13,9 @@ from rest_framework.exceptions import ValidationError
 
 
 purchase_limit = LimitConfig.objects.first()
+
 if purchase_limit is None:
     purchase_limit = LimitConfig(limit=5000)  # Default limit if not set
-
 
 class ReimbursementCommentSerializer(serializers.ModelSerializer):
     class Meta:
