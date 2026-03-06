@@ -7,11 +7,15 @@ from .models import (
 from purchases.models import LimitConfig
 from decimal import Decimal
 from utils.receipt_validation import validate_receipt
+from django.utils import timezone
+from django.db.models import Sum
+from rest_framework.exceptions import ValidationError
+
 
 purchase_limit = LimitConfig.objects.first()
+
 if purchase_limit is None:
     purchase_limit = LimitConfig(limit=5000)  # Default limit if not set
-
 
 class ReimbursementCommentSerializer(serializers.ModelSerializer):
     class Meta:
@@ -47,6 +51,7 @@ class ReimbursementItemSerializer(serializers.ModelSerializer):
         # Basic validations
         if unit_price is not None and unit_price < 0:
             raise serializers.ValidationError({"unit_price": "Unit price cannot be negative."})
+        
         if quantity is not None and quantity <= 0:
             raise serializers.ValidationError({"quantity": "Quantity must be greater than zero."})
 
@@ -89,19 +94,84 @@ class ReimbursementItemSerializer(serializers.ModelSerializer):
         return instance
 
 
-
 class ReimbursementSerializer(serializers.ModelSerializer):
     items = ReimbursementItemSerializer(many=True)
     comments = ReimbursementCommentSerializer(many=True, required=False)
     requester = serializers.StringRelatedField(read_only=True)
+    balance = serializers.SerializerMethodField()
 
     class Meta:
         model = Reimbursement
         fields = [
             'id', 'status', 'items', 'comments', 'requester',
-            'internal_control_status', 'store', 'disbursement_status', 'bank', 'account'
+            'internal_control_status', 'store', 'disbursement_status', 'bank', 'account', 'balance', 'voucher_id'
         ]
-        read_only_fields = ['requester', 'disbursement_status']
+        read_only_fields = ['requester', 'disbursement_status', 'balance']
+        
+    def validate(self, attrs):
+
+        print("validating data <==> ", attrs)
+        request = self.context['request']
+        user = request.user
+        store = user.store
+
+        items = attrs.get('items', [])
+        if not store or not store.budget:
+            return attrs  # No budget configured → allow
+
+        #  Calculate incoming reimbursement total
+        incoming_total = sum(
+            Decimal(item['unit_price']) * item['quantity']
+            for item in items
+        )
+
+        #  Calculate current week boundaries (safe, timezone-aware)
+        now = timezone.now()
+        start_week = now - timezone.timedelta(days=now.weekday())
+        start_week = start_week.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_week = start_week + timezone.timedelta(days=7)
+
+        weekly_expenses = (
+            Reimbursement.objects.filter(
+                store=store,
+                created_at__gte=start_week,
+                created_at__lt=end_week,
+            )
+            .aggregate(total=Sum('total_amount'))['total']
+            or Decimal('0.00')
+        )
+
+        projected_total = weekly_expenses + incoming_total
+        print("projected total <==> ", projected_total)
+
+        if projected_total > store.budget:
+            raise ValidationError({
+                "budget": (
+                    f"Weekly budget exceeded. "
+                    f"Spent: ₦{weekly_expenses:,.2f}, "
+                    f"Request: ₦{incoming_total:,.2f}, "
+                    f"Budget: ₦{store.budget:,.2f}"
+                )
+            })
+
+        return attrs
+    
+    #get balance for the store this reimbursement belongs to
+    def get_balance(self, instance):
+        store = instance.store
+        if not store:
+            return None
+
+        approved_total = (
+            store.reimbursements
+            .filter(internal_control_status='approved')
+            .aggregate(total=Sum('total_amount'))
+            ['total']
+            or Decimal('0')
+        )
+        
+        return str(store.budget - approved_total)
+
 
     def to_representation(self, instance):
         rep = super().to_representation(instance)
@@ -126,10 +196,10 @@ class ReimbursementSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
             # REMOVE requester if present in validated_data
             validated_data.pop('requester', None)
-
             items_data = validated_data.pop('items')
             comments_data = validated_data.pop('comments', [])
 
+            print("Validated data <==> ", validated_data)
             user = self.context['request'].user
 
             # Validate items
@@ -152,7 +222,7 @@ class ReimbursementSerializer(serializers.ModelSerializer):
             total_amount = sum(
                 Decimal(i['unit_price']) * i['quantity'] for i in items_data
             )
-
+            print("total amount...")
             reimbursement = Reimbursement.objects.create(
                 requester=user,
                 total_amount=total_amount,

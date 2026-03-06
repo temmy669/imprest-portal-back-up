@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .models import PurchaseRequest, PurchaseRequestItem, Comment, LimitConfig
 
 
-purchase_limit = LimitConfig.objects.first()
+# purchase_limit = LimitConfig.objects.first()
 
 class PurchaseRequestItemSerializer(serializers.ModelSerializer):
     class Meta:
@@ -84,6 +84,7 @@ class PurchaseRequestSerializer(serializers.ModelSerializer):
        
         for item in items:
             item_total = item['unit_price'] * item['quantity']
+            purchase_limit = LimitConfig.objects.first()
             if item_total < purchase_limit.limit:
                 raise serializers.ValidationError(
                     f"Item '{item['expense_item']}' total is below the purchase request limit and cannot be included in a purchase request."

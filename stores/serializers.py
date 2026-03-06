@@ -1,6 +1,8 @@
 # stores/serializers.py
 from rest_framework import serializers
 from .models import Region, Store, StoreBudgetHistory
+from django.db.models import Sum
+from decimal import Decimal
 
 class RegionSerializer(serializers.ModelSerializer):
     class Meta:
@@ -64,16 +66,27 @@ class StoreBudgetHistorySerializer(serializers.ModelSerializer):
 
 class StoreBudgetSerializer(serializers.ModelSerializer):
     budget_history = StoreBudgetHistorySerializer(many=True, read_only=True)
+    balance = serializers.SerializerMethodField()
 
     class Meta:
         model = Store
         fields = [
             'id', 'code', 'name', 'region',
             'budget', 'balance', 'updated_at',
-            'budget_history'  # nested history
+            'budget_history'
         ]
-        read_only_fields = ['updated_at', 'created_at']
-        
+        read_only_fields = ['updated_at', 'created_at', 'balance']
+
+    def get_balance(self, instance):
+        approved_total = (
+            instance.reimbursements
+            .filter(internal_control_status='approved')
+            .aggregate(total=Sum('total_amount'))
+            ['total']
+            or Decimal('0')
+        )
+        return str(instance.budget - approved_total)
+
     def to_representation(self, instance):
         rep = super().to_representation(instance)
         rep['region'] = instance.region.name

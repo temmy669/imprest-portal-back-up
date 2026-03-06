@@ -19,7 +19,7 @@ from django.http import HttpResponse
 from collections import Counter
 from datetime import datetime
 from django.db.models import Q
-from utils.email_utils import send_rejection_notification, send_approval_notification
+from utils.email_utils import send_rejection_notification, send_approval_notification, send_creation_notification
 from django.db import transaction
 
 class PurchaseRequestView(APIView):
@@ -28,6 +28,7 @@ class PurchaseRequestView(APIView):
     """
     serializer_class = PurchaseRequestSerializer
     authentication_classes = [JWTAuthenticationFromCookie]
+    
     def get_permissions(self):
         if self.request.method == 'GET':
             return [IsAuthenticated(), ViewPurchaseRequest()]
@@ -45,9 +46,9 @@ class PurchaseRequestView(APIView):
         print(user)
         queryset = PurchaseRequest.objects.all().order_by('-created_at')
 
-        # Restaurant Managers only see their own requests
+        # Restaurant Managers only see requests from their own stores
         if user.role.name == 'Restaurant Manager':
-            queryset = queryset.filter(requester=user)
+            queryset = queryset.filter(store_id = user.store_id)
             
         # Area Managers see requests from their stores
         elif user.role.name == 'Area Manager':
@@ -95,22 +96,34 @@ class PurchaseRequestView(APIView):
         """
         Create a new purchase request
         """
-        serializer = PurchaseRequestSerializer(data=request.data, context={'request': request})
-        if serializer.is_valid():
-            # Calculate total amount
-            total_amount = sum(
-                item['unit_price'] * item['quantity']
-                for item in request.data.get('items', [])
-            )
+        try:
+            serializer = PurchaseRequestSerializer(data=request.data, context={'request': request})
+            if serializer.is_valid():
+                # Calculate total amount
+                total_amount = sum(
+                    item['unit_price'] * item['quantity']
+                    for item in request.data.get('items', [])
+                )
 
-            # Save the request
-            purchase_request = serializer.save(
-                requester=request.user,
-                total_amount=total_amount
-            )
-
-            return CustomResponse(True, "Purchase Request Created Successfully", 201, serializer.data)
-        return CustomResponse(False, serializer.errors)
+                # Save the request
+                purchase_request = serializer.save(
+                    requester=request.user,
+                    total_amount=total_amount
+                )
+                try:
+                    send_creation_notification(purchase_request)
+                except Exception as err:
+                    print(f"failed to send PR creation email: {err}")
+                    pass
+                return CustomResponse(True, "Purchase Request Created Successfully", 201, serializer.data)
+            return CustomResponse(
+                valid=False,
+                msg="Unable to create Purchase request", 
+                status=400, 
+                data=serializer.errors)
+        except Exception as err:
+            return CustomResponse(False, "Unable to create purchase request", 400, {"error":str(err)})
+            
     
     def put(self, request, pk):
         """
@@ -248,27 +261,21 @@ class ApprovePurchaseRequestItemView(APIView):
             return CustomResponse(False, "Item is already approved.", 400)
 
         with transaction.atomic():
-
             # Lock PR and item row
             pr = PurchaseRequest.objects.select_for_update().get(pk=pk)
             item = PurchaseRequestItem.objects.select_for_update().get(pk=item_id, request=pr)
-
             # Approve this item
             item.status = "approved"
             item.save()
-
             # Re-fetch all items safely
             items = list(pr.items.select_for_update())
-
             # If ANY item is declined → PR remains declined
             if any(i.status == "declined" for i in items):
                 pr.status = "declined"
                 pr.area_manager = request.user
                 pr.area_manager_declined_at = timezone.now()
                 pr.save()
-                
                 # Decline emails are only sent when an item is DECLINED, not approved.
-
             # If ALL items are approved → PR is approved
             elif all(i.status == "approved" for i in items):
                 pr.status = "approved"
@@ -277,12 +284,10 @@ class ApprovePurchaseRequestItemView(APIView):
                 pr.area_manager_approved_at = timezone.now()
                 pr.save()
                 send_approval_notification(pr)  # Uncomment when ready
-
             # Else: some pending, some approved → PR stays pending
             else:
                 pr.status = "pending"
                 pr.save()
-
         return CustomResponse(
             True,
             {
@@ -293,7 +298,6 @@ class ApprovePurchaseRequestItemView(APIView):
             200
         )
 
-        
 class DeclinePurchaseRequestView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
     permission_classes = [IsAuthenticated, DeclinePurchaseRequest]
@@ -309,7 +313,6 @@ class DeclinePurchaseRequestView(APIView):
         with transaction.atomic():
             # Lock the PR to prevent concurrency issues
             pr = PurchaseRequest.objects.select_for_update().get(pk=pk)
-
             if pr.status in ("approved", "declined"):
                 return CustomResponse(False, "This purchase request has already been processed.", 400)
 

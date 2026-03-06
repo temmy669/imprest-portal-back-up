@@ -9,6 +9,7 @@ from .views import (
     ExportReimbursement,
     DisbursemntView,
     BulkDisbursementView,
+    BulkApproveDeclineView
 
 )   
 from django.conf import settings
@@ -19,22 +20,17 @@ urlpatterns = [
     # List, create, update and submit reimbursement requests
     path('reimbursements/', ReimbursementRequestView.as_view(), name='reimbursement-list-create'),
     path('reimbursements/<int:pk>/', ReimbursementRequestView.as_view(), name='reimbursement-update'),
-   
     # Upload receipt for a specific reimbursement item
     path('reimbursement-items/receipt/', UploadReceiptView.as_view(), name='upload-receipt'),
-    
     # Approve entire reimbursement request
     path('reimbursements/<int:pk>/approve/', ApproveReimbursementView.as_view(), name='approve-reimbursement'),
-
     # Approve individual reimbursement item
     path('reimbursements/<int:pk>/items/<int:item_id>/approve/', ApproveReimbursementItemView.as_view(), name='approve-reimbursement-item'),
-
     # Decline entire reimbursement request
     path('reimbursements/<int:pk>/decline/', DeclineReimbursementView.as_view(), name='decline-reimbursement'),
-
+    path('reimbursements/bulk-update/', BulkApproveDeclineView.as_view(), name="bulk-update"),
     # Decline individual reimbursement item
     path('reimbursements/<int:pk>/items/<int:item_id>/decline/', DeclineReimbursementItemView.as_view(), name='decline-reimbursement-item'),
-    
     # export reimbursements
     path('reimbursements/export/', ExportReimbursement.as_view(), name='export-reimbursements'),
 

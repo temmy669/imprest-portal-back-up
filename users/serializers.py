@@ -63,7 +63,7 @@ class UserSerializer(serializers.ModelSerializer):
         else:
             role = role_data  # Already a Role instance
     
-        assigned_stores = validated_data.pop('assigned_stores', [])
+        assigned_stores_ids = validated_data.pop('assigned_stores', [])
         store = validated_data.pop('store', None)
         email = validated_data.get('email')
     
@@ -77,8 +77,10 @@ class UserSerializer(serializers.ModelSerializer):
         user.save()
     
         if role and role.name == 'Area Manager':
-            user.assigned_stores.set(assigned_stores)
+            user.assigned_stores.set(assigned_stores_ids)
             user.store = None
+            assigned_stores = user.assigned_stores.all()
+            assigned_stores.update(area_manager=user)
         else:
             user.assigned_stores.clear()
             user.store = store
@@ -153,6 +155,13 @@ class UserUpdateSerializer(serializers.ModelSerializer):
                 and new_role_name != 'Area Manager'
             )
             
+            #check if changing from Restaurant Manager to something else
+            is_role_change_from_restaurant_manager = (
+                prev_role == 'Restaurant Manager'
+                and new_role_name != 'Restaurant Manager'
+            )
+        
+            
             # -----------------------------
             # 2. VALIDATE INCOMING STORE ASSIGNMENTS
             # -----------------------------
@@ -202,6 +211,13 @@ class UserUpdateSerializer(serializers.ModelSerializer):
                 
                 # Clear store assignments for the demoted area manager
                 instance.store = None
+            
+            if is_role_change_from_restaurant_manager:
+                # if the new role is area manager clear just the store and leave the region
+                instance.store = None
+                if new_role_name != 'Area Manager':
+                    instance.region = None
+                
             
             # -----------------------------
             # 5. HANDLE STORE ASSIGNMENTS (for current/new Area Managers)

@@ -2,7 +2,8 @@ from collections import Counter
 from rest_framework.generics import get_object_or_404
 from utils.pagination import DynamicPageSizePagination
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.generics import ListAPIView
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from .models import *
 from .serializers import *
 from purchases.models import PurchaseRequest, LimitConfig, PurchaseRequestItem
@@ -19,11 +20,12 @@ from django.core.files.storage import FileSystemStorage
 import os
 from django.conf import settings
 from django.utils import timezone
+from decimal import InvalidOperation, Decimal
 
 from django.core.files.storage import FileSystemStorage
 from rest_framework.parsers import MultiPartParser, FormParser
 
-from django.db.models import Q, Count
+from django.db.models import Q, Count, Sum
 from collections import Counter
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from datetime import datetime
@@ -38,6 +40,7 @@ from utils.receipt_validation import validate_receipt
 from django.db import transaction
 from utils.email_utils import send_reimbursement_rejection_notification, send_reimbursement_approval_notification
 from .post_to_byd import build_sap_payload
+from roles.models import Role
 
 class ReimbursementRequestView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
@@ -55,46 +58,53 @@ class ReimbursementRequestView(APIView):
         user = request.user
         queryset = Reimbursement.objects.all().order_by('-created_at')
 
-        # Role-based access
-        if user.role.name == 'Restaurant Manager':
-            queryset = queryset.filter(requester=user)
-        elif user.role.name == 'Area Manager':
-            queryset = queryset.filter(store__in=user.assigned_stores.all())
-        elif user.role.name == 'Internal Control':
-            queryset = queryset.filter(status='approved')
-        elif user.role.name == 'Treasurer':
-            queryset = queryset.filter(internal_control_status='approved')
-
         # Get filters
         area_manager_ids = request.query_params.getlist("area_manager")
+       
         store_ids = request.query_params.getlist("stores")
         start_date = request.query_params.get("start_date")
         end_date = request.query_params.get("end_date")
         status = request.query_params.get("status")
+        internal_control_status = request.query_params.get("internal_control_status", None)
         search = request.query_params.get("search")
         search_query = request.query_params.get("q", "").strip()
         region_id = request.query_params.get("region")
         disbursement_status = request.query_params.get("disbursement_status")
+
+        # Role-based access
+        if user.role.name == 'Restaurant Manager':
+            queryset = queryset.filter(store_id=user.store_id)
+        elif user.role.name == 'Area Manager':
+            queryset = queryset.filter(store__in=user.assigned_stores.all())
+        elif user.role.name == 'Internal Control':
+            queryset = queryset.filter(
+                Q(status__in=['approved', 'pending']) & 
+                Q( Q(internal_control=user) | Q(internal_control__isnull=True)))
+        elif user.role.name == 'Treasurer':
+            queryset = queryset.filter(internal_control_status='approved')
         
         # Determine which field represents status for the user role
         if user.role.name == 'Treasurer':
             status_field = 'disbursement_status'
         elif user.role.name == 'Internal Control':
             status_field = 'internal_control_status'
+
         else:
             status_field = 'status'
 
         # Keep a base queryset for status count BEFORE applying query param filters
         base_queryset_for_status_count = queryset
         status_filter = False
+
         # Calculate status counts across all statuses BEFORE query param filters
-        status_counts_all = (
-            base_queryset_for_status_count
-            .values(status_field)
-            .annotate(count=Count(status_field))
-            .order_by()
-        )
-        status_count_dict = {item[status_field]: item["count"] for item in status_counts_all}
+        # status_counts_all = (
+        #     base_queryset_for_status_count
+        #     .values(status_field)
+        #     .annotate(count=Count(status_field))
+        #     .order_by()
+        # )
+        # print("Status count all ==> ", status_counts_all)
+        # status_count_dict = {item[status_field]: item["count"] for item in status_counts_all}
 
         # --- Now apply filters ---
         if area_manager_ids:
@@ -105,6 +115,7 @@ class ReimbursementRequestView(APIView):
 
         if store_ids:
             queryset = queryset.filter(store_id__in=store_ids)
+            base_queryset_for_status_count = queryset
 
         if region_id:
             queryset = queryset.filter(store__region_id=region_id)
@@ -123,9 +134,13 @@ class ReimbursementRequestView(APIView):
 
         if status:
             queryset = queryset.filter(status=status)
-            
-            # status_filter = True
-            # status_field
+        
+        if internal_control_status:
+            if internal_control_status in ["declined", "approved"]:
+                queryset = queryset.filter(
+                internal_control_status=internal_control_status, internal_control=user)
+            else:
+                queryset = queryset.filter(internal_control_status=internal_control_status)
 
         if search:
             queryset = queryset.filter(
@@ -143,13 +158,23 @@ class ReimbursementRequestView(APIView):
             else:
                 return CustomResponse(False, "Only RR-XXXX search is supported in 'q'", 400)
         
-        
+    
         # #return empty status count if queryset is empty after filters
         # if not queryset.exists():
         #     status_count_dict = {}
-            
-        # --- Pagination and serialization ---
         
+        # STATUS COUNT
+        status_counts_all = (
+            base_queryset_for_status_count
+            .values(status_field)
+            .annotate(count=Count(status_field))
+            .order_by()
+        )
+
+        print("Status count all ==> ", status_counts_all)
+        status_count_dict = {item[status_field]: item["count"] for item in status_counts_all}
+        
+        # --- Pagination and serialization ---
         paginator = DynamicPageSizePagination()
         paginated_queryset = paginator.paginate_queryset(queryset, request)
         serializer = ReimbursementSerializer(paginated_queryset, many=True)
@@ -170,61 +195,90 @@ class ReimbursementRequestView(APIView):
 
     def post(self, request):
         # Step 1: Create reimbursement (draft by default)
-        serializer = ReimbursementSerializer(data=request.data, context={'request': request})
-        if not serializer.is_valid():
-            return CustomResponse(False, "Invalid data", 400, serializer.errors)
+        print("Request Data ==> ", request.data)
+        try:
+            serializer = ReimbursementSerializer(data=request.data, context={'request': request})
+            if not serializer.is_valid():
+                errors = serializer.errors
+                # Try to extract a meaningful message
+                message = "Invalid data"
+                if isinstance(errors, dict):
+                    if 'detail' in errors:
+                        message = errors['detail']
 
-        
-        reimbursement = serializer.save(requester=request.user)
+                    else:
+                        first_key = next(iter(errors))
+                        first_error = errors[first_key]
+                        if isinstance(first_error, list):
+                            message = first_error[0]
+                        else:
+                            message = first_error
 
-        # Update the related purchase request with the newly created reimbursement id
-        purchase_request_refs = set()
-
-        for item in reimbursement.items.all():
-            ref = (item.purchase_request_ref or "").strip()
-            match = re.match(r'^PR-0*(\d+)', ref)  # handles cases like PR-0015 or PR-0015-12000.00
-            if match:
-                pr_id = int(match.group(1))  # convert to int (15)
-                print(pr_id)
-                purchase_request_refs.add(pr_id)
-
-        if purchase_request_refs:
-            purchase_requests = PurchaseRequest.objects.filter(id__in=purchase_request_refs)
-            purchase_requests.update(reimbursement=reimbursement)
-        
-       # Sync receipt_validated from purchase request items to reimbursement items
-        for item in reimbursement.items.all():
-            pr_item_ref = (item.purchase_request_ref or "").strip()
-            match = re.match(r'^PR-0*(\d+)', pr_item_ref)
-
-            if not match:
-                continue
-
-            pr_id = int(match.group(1))
-
-            pr_item = (
-                PurchaseRequestItem.objects
-                .filter(
-                    request_id=pr_id,
+                return CustomResponse(
+                    False,
+                    message,
+                    400,
+                    None
                 )
-                .order_by('-id')
-                .first()
+            
+            reimbursement = serializer.save(requester=request.user)
+
+            # Update the related purchase request with the newly created reimbursement id
+            purchase_request_refs = set()
+
+            for item in reimbursement.items.all():
+                ref = (item.purchase_request_ref or "").strip()
+                match = re.match(r'^PR-0*(\d+)', ref)  # handles cases like PR-0015 or PR-0015-12000.00
+                if match:
+                    pr_id = int(match.group(1))  # convert to int (15)
+                    print(pr_id)
+                    purchase_request_refs.add(pr_id)
+
+            if purchase_request_refs:
+                purchase_requests = PurchaseRequest.objects.filter(id__in=purchase_request_refs)
+                purchase_requests.update(reimbursement=reimbursement)
+            
+        # Sync receipt_validated from purchase request items to reimbursement items
+            for item in reimbursement.items.all():
+                pr_item_ref = (item.purchase_request_ref or "").strip()
+                match = re.match(r'^PR-0*(\d+)', pr_item_ref)
+
+                if not match:
+                    continue
+
+                pr_id = int(match.group(1))
+
+                pr_item = (
+                    PurchaseRequestItem.objects
+                    .filter(
+                        request_id=pr_id,
+                    )
+                    .order_by('-id')
+                    .first()
+                )
+
+                if not pr_item:
+                    continue
+
+                item.receipt_validated = pr_item.receipt_validated
+                item.save(update_fields=['receipt_validated'])
+
+            return CustomResponse(
+                True,
+                "Reimbursement submitted for approval",
+                201,
+                ReimbursementSerializer(reimbursement).data
             )
-
-            if not pr_item:
-                continue
-
-            item.receipt_validated = pr_item.receipt_validated
-            item.save(update_fields=['receipt_validated'])
-
         
-        
-        return CustomResponse(
-            True,
-            "Reimbursement submitted for approval",
-            201,
-            ReimbursementSerializer(reimbursement).data
-        )
+        except Exception as err:
+            return CustomResponse(
+                False,
+                "Unable to create reimbursement",
+                400,
+                {
+                    "error":str(err)
+                }
+            )
         
         
 
@@ -327,10 +381,9 @@ class ApproveReimbursementView(APIView):
     def post(self, request, pk):
        with transaction.atomic(): 
             reimbursement = get_object_or_404(Reimbursement, pk=pk)
-            self.check_object_permissions(request, reimbursement)
-
+            # self.check_object_permissions(request, reimbursement)
             role = request.user.role.name
-
+            print("role", role)
             if role == "Area Manager":
                 if reimbursement.status != "pending":
                     return CustomResponse(False, "Reimbursement is not pending", 400)
@@ -355,11 +408,10 @@ class ApproveReimbursementView(APIView):
             reimbursement.updated_by = request.user
             reimbursement.save(user=request.user)
 
-
-            send_reimbursement_approval_notification(
-                reimbursement,
-                request.user
-            )
+            # send_reimbursement_approval_notification(
+            #     reimbursement,
+            #     request.user
+            # )
 
             return CustomResponse(
                 True,
@@ -454,9 +506,10 @@ class DeclineReimbursementView(APIView):
             items = re.items.select_for_update().all()
 
             self.check_object_permissions(request, re)
+            user_role = request.user.role.name
 
             # -------- INTERNAL CONTROL DECLINE --------
-            if request.user.role.name == "Internal Control":
+            if user_role == "Internal Control":
                 re.internal_control_status = "declined"
                 re.status = "pending"
                 re.internal_control = request.user
@@ -468,21 +521,16 @@ class DeclineReimbursementView(APIView):
                 )
 
                 re.save(user=request.user)
-
                 send_reimbursement_rejection_notification(
                     re, request.user, comment_text
                 )
-
             # -------- AREA MANAGER FINAL DECLINE --------
-            elif request.user.role.name == "Area Manager":
+            elif user_role == "Area Manager":
                 re.status = "declined"
                 re.area_manager = request.user
                 re.area_manager_declined_at = timezone.now()
-
                 items.update(status="declined")
-
                 re.save(user=request.user)
-
                 send_reimbursement_rejection_notification(
                     re, request.user, comment_text
                 )
@@ -505,6 +553,135 @@ class DeclineReimbursementView(APIView):
             },
             200
         )
+    
+class BulkApproveDeclineView(APIView):
+    """Bulk approve or decline reimbursements. """
+
+    queryset = Reimbursement.objects.all()
+    serializer_class = ReimbursementSerializer
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthenticationFromCookie]
+
+    def post(self, request):
+        try:
+            reimbursement_ids = request.data.get("reimbursement_ids", [])
+            action = request.query_params.get("action", None)
+            print("action ==> ", action)
+            if not reimbursement_ids:
+                return CustomResponse(
+                    status=400,
+                    valid=False,
+                    msg=f"No Reimbursements selected for bulk update."
+                )
+
+            if not action:
+                return CustomResponse(
+                    status=400,
+                    valid=False,
+                    msg=f"Action is required. action must be either `approve` or `decline`"
+                )
+
+            if not action in ["approve", "decline"]:
+                return CustomResponse(
+                    status=400,
+                    valid=False,
+                    msg=f"Invalid action: {action}"
+                )
+            
+            user = request.user
+           
+            reimbursements = self.queryset.filter(id__in=reimbursement_ids)
+            reimbursements_array =[]
+            reimbursement_items_array = []
+
+            # check if any reimbursement exists for the specified IDs
+            if reimbursements.exists():
+                user_role = user.role.name
+                print("user role ==> ", user_role)
+                if user_role == Role.Type.AREA_MANAGER:
+                    for reimbursement in reimbursements:
+                        reimbursement.status = "approved" if action == "approve" else "declined"
+                        reimbursement.area_manager=user
+                        reimbursement.area_manager_approved_at=timezone.now() if action == "approve" else None
+                        reimbursement.area_manager_declined_at=timezone.now() if action == "decline" else None
+                        reimbursements_array.append(reimbursement)
+
+                        for reimbursement_item in reimbursement.items.all():
+                            reimbursement_item.status = "approved" if action == "approve" else "declined"
+                            reimbursement_items_array.append(reimbursement_item)
+
+                elif user_role == Role.Type.INTERNAL_CONTROL:
+                    print("internal control ", user)
+                    for reimbursement in reimbursements:
+                        reimbursement.status="pending" if action == "decline" else reimbursement.status
+                        reimbursement.internal_control=user
+                        reimbursement.internal_control_status = "approved" if action == "approve" else "decline"
+                        reimbursement.internal_control_approved_at=timezone.now() if action == "approve" else None
+                        reimbursement.internal_control_declined_at=timezone.now() if action == "decline" else None
+                        reimbursements_array.append(reimbursement)
+                        print("reimbursement =>", reimbursement)
+                        for reimbursement_item in reimbursement.items.all():
+                            reimbursement.status="pending" if action == "decline" else reimbursement.status
+                            reimbursement_item.internal_control_status= "approved" if action == "approve" else "decline"
+                            reimbursement_items_array.append(reimbursement_item)
+                            print("item ==> ", reimbursement_item)
+                else:
+                    return CustomResponse(
+                        valid=False,
+                        msg=f"You are not authorized to perform this action",
+                        status=403
+                    )
+                # define internal control fields
+                internal_control_fiels = [
+                    "status",
+                    "internal_control",
+                    "internal_control_status",
+                    "internal_control_approved_at",
+                    "internal_control_declined_at"]
+                # define area manager's fields
+                area_manager_fields = [
+                    "status",
+                    "area_manager",
+                    "area_manager_approved_at",
+                    "area_manager_declined_at"]
+                
+                # Check fields to update
+                fields_to_update = area_manager_fields if user_role == Role.Type.AREA_MANAGER else internal_control_fiels
+
+                # Ensure the database is in a consistent state in event of 
+                # any update failure.
+                with transaction.atomic():
+                    print("bulk updating... ", reimbursements_array)
+                    Reimbursement.objects.bulk_update(reimbursements_array, 
+                                                      fields=fields_to_update,
+                                                      batch_size=200)
+                    print("bulk updating items...", reimbursement_items_array)
+                    ReimbursementItem.objects.bulk_update(reimbursement_items_array, 
+                                                          fields=["status","internal_control_status"],
+                                                          batch_size=200)
+                    print("done bulk updating... ")
+                    return CustomResponse(
+                        valid=True,
+                        msg=f"""{len(reimbursements_array)} reimbursements successfully {"approved" if action == "approve" else "declined"}""",
+                        status=200
+                    )
+
+            else:
+                return CustomResponse(
+                    valid=False,
+                    msg="Reimbursements do not exist",
+                    status=400
+                )
+                
+        except Exception as err:
+            return CustomResponse(
+                valid=False,
+                msg=f"Unable to {action} reimbursement",
+                data={
+                    "error":str(err)
+                }
+            )
+
 
 class DeclineReimbursementItemView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
@@ -569,6 +746,7 @@ class DeclineReimbursementItemView(APIView):
                     re.internal_control_status = "pending"
                 else:
                     re.internal_control_status = "declined"
+                    re.status = "pending"
                     re.internal_control = request.user
                     re.internal_control_declined_at = timezone.now()
 
@@ -592,16 +770,188 @@ class DeclineReimbursementItemView(APIView):
 class ExportReimbursement(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
     permission_classes = [IsAuthenticated, ViewReimbursementRequest]
+    
+    # -------------------------------
+    # Helpers
+    # -------------------------------
+    #Helper methods called by the export view
+    def get_queryset(self, user, start_date, end_date, status):
+        qs = Reimbursement.objects.all()
+        
+        if user.role.name == "Area Manager":
+            return qs.filter(
+                store__in=user.assigned_stores.all(),
+                created_at__date__range=(start_date, end_date),
+                status__iexact=status,
+            )
 
+        if user.role.name == "Internal Control":
+            return qs.filter(
+                status="approved",
+                created_at__date__range=(start_date, end_date),
+                internal_control_status__iexact=status,
+            )
+
+        if user.role.name == "Treasurer":
+            return qs.filter(
+                internal_control_status="approved",
+                created_at__date__range=(start_date, end_date),
+                disbursement_status__iexact=status,
+            )
+
+        if user.role.name == "Restaurant Manager":
+            return qs.filter(
+                requester=user,
+                created_at__date__range=(start_date, end_date),
+                status__iexact=status,
+            )
+
+        return None
+
+    def export_internal_control(self, queryset, start_date, end_date):
+    
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.title = "Internal Control"
+
+        internal_control_headers=[
+            "Request ID",
+            "Requester",
+            "Store",
+            "Store Code",
+            "Store Manager",
+            "Expense Item",
+            "Amount"
+            "Status"
+            "Date Created"
+        ]
+
+        # expense_types = sorted({
+        #     item.item_name
+        #     for rr in queryset
+        #     for item in rr.items.all()
+        # })
+
+        # headers = ["Staff Name"] + expense_types + ["Total"]
+        sheet.append(internal_control_headers)
+        book=[]
+
+        for rr in queryset:
+            store = rr.store
+            store_name = store.name
+            
+            row = [
+                f"RR-{rr.id:04d}",
+                rr.requester.get_full_name(),
+                store_name,
+                store.code,
+                store.area_manager.get_full_name() if store.area_manager else "Unknown",
+                ",".join(rr.items.values_list("item_name", flat=True)),
+                float(rr.total_amount),
+                rr.internal_control_status,
+                rr.created_at.strftime("%d-%m-%Y")
+            ]
+        
+            sheet.append(row)
+     
+        return self.build_response(
+            workbook,
+            f"IC_reimbursements_{start_date.date()}_{end_date.date()}.xlsx"
+        )
+
+    def export_treasury(self, queryset:Reimbursement, start_date, end_date):
+        from collections import defaultdict
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+        sheet.title = "Treasury"
+
+        treasurer_headers = [
+            "Request ID",
+            "Requester",
+            "Region",
+            "Store",
+            "Store Code",
+            "Expense Item",
+            "Area Manager",
+            "Amount",
+            "Status",
+            "Date Created",
+            "Bank Account",
+            "Bank GL Code"
+        ]
+
+        sheet.append(treasurer_headers)
+
+        for rr in queryset:
+            store = rr.store
+            store_name = store.name
+
+            row = [
+                f"RR-{rr.id:04d}",
+                rr.requester.get_full_name(),
+                store.region.name if rr.store.region else "",
+                store_name,
+                store.code,
+                ",".join(rr.items.values_list("item_name", flat=True)),
+                store.area_manager.get_full_name() if store.area_manager else "Unknown",
+                float(rr.total_amount),
+                rr.status,
+                rr.created_at.strftime("%d-%m-%Y"),
+                rr.bank.bank_name if rr.bank else "Unknown",
+                rr.bank.gl_code if rr.bank else "Unknown"
+            ]
+          
+            sheet.append(row)
+
+        return self.build_response(
+            workbook,
+            f"Treasury_reimbursements_{start_date.date()}_{end_date.date()}.xlsx"
+        )
+
+
+    def export_default(self, queryset, user, start_date, end_date):
+        workbook = openpyxl.Workbook()
+        sheet = workbook.active
+
+        headers = ["Request ID", "Requester", "Store", "Total", "Status", "Date"]
+        sheet.append(headers)
+
+        for rr in queryset:
+            sheet.append([
+                f"RR-{rr.id:04d}",
+                f"{rr.requester.first_name} {rr.requester.last_name}",
+                rr.store.name if rr.store else "",
+                rr.total_amount,
+                rr.status.capitalize(),
+                rr.created_at.strftime("%Y-%m-%d")
+            ])
+
+        return self.build_response(
+            workbook,
+            f"reimbursements_{start_date.date()}_{end_date.date()}.xlsx"
+        )
+
+
+    def build_response(self, workbook, filename):
+        response = HttpResponse(
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        workbook.save(response)
+        return response
+
+    #-------------------------------
+    # Main GET method for export
+    #-------------------------------    
+     
     def get(self, request):
         start_date = request.query_params.get("start_date")
         end_date = request.query_params.get("end_date")
         status = request.query_params.get("status")
+        # template = request.query_params.get("template") # e.g., "internal_control", "treasury", etc.
 
         user = request.user
-        reimbursement = Reimbursement.objects.all()
 
-        # validate inputs
         if not start_date or not end_date or not status:
             return CustomResponse(False, "start_date, end_date and status are required", 400)
 
@@ -614,128 +964,19 @@ class ExportReimbursement(APIView):
         if start_date > end_date:
             return CustomResponse(False, "start_date cannot be after end_date", 400)
 
-        # role-based queryset
-        if user.role.name == "Area Manager":
-            queryset = reimbursement.filter(
-                store__in=user.assigned_stores.all(),
-                created_at__date__gte=start_date.date(),
-                created_at__date__lte=end_date.date(),
-                status__iexact=status,
-            )
-            headers = ["Request ID", "Requester", "Store", "Total Amount", "Status", "Date Created"]
-            file_name = f"AM_reimbursement_requests_{start_date.date()}_{end_date.date()}.xlsx"
-
-        elif user.role.name == "Internal Control":
-            queryset = reimbursement.filter(
-                status="approved",
-                created_at__date__gte=start_date.date(),
-                created_at__date__lte=end_date.date(),
-                internal_control_status__iexact=status,
-            )
-            headers = ["Request ID", "Requester", "Store", "Total Amount", "Status", "Date Created"]
-            file_name = f"IC_reimbursement_requests_{start_date.date()}_{end_date.date()}.xlsx"
-
-        elif user.role.name == "Treasurer":
-            queryset = reimbursement.filter(
-                internal_control_status="approved",
-                created_at__date__gte=start_date.date(),
-                created_at__date__lte=end_date.date(),
-                disbursement_status__iexact=status,
-            )
-            headers = [
-                "Request ID",
-                "Requester",
-                "Region",
-                "Store",
-                "Area Manager",
-                "Total Amount",
-                "Status",
-                "Date Created",
-                "Bank Name",
-                "Account Name",
-            ]
-            file_name = f"Treasury_reimbursement_requests_{start_date.date()}_{end_date.date()}.xlsx"
-
-        elif user.role.name == "Restaurant Manager":
-            queryset = reimbursement.filter(
-                requester=user,
-                created_at__date__gte=start_date.date(),
-                created_at__date__lte=end_date.date(),
-                status__iexact=status,
-            )
-            headers = ["Request ID", "Store", "Total Amount", "Status", "Date Created"]
-            file_name = f"RM_reimbursement_requests_{start_date.date()}_{end_date.date()}.xlsx"
-
-        else:
+        queryset = self.get_queryset(user, start_date, end_date, status)
+        if queryset is None:
             return CustomResponse(False, "You are not allowed to export reimbursements", 403)
 
-        # workbook
-        workbook = openpyxl.Workbook()
-        sheet = workbook.active
-        sheet.title = f"RRs {start_date:%d-%m} to {end_date:%d-%m}"
-        sheet.append(headers)
+        if user.role.name == "Internal Control":
+            return self.export_internal_control(queryset, start_date, end_date)
 
-        # rows
-        for rr in queryset:
-            if user.role.name == "Internal Control":
-                row = [
-                    f"RR-{rr.id:04d}",
-                    f"{rr.requester.first_name} {rr.requester.last_name}",
-                    rr.store.name if rr.store else "",
-                    rr.total_amount, 
-                    rr.internal_control_status.capitalize(),
-                    rr.created_at.strftime("%Y-%m-%d")
-                ]
+        if user.role.name == "Treasurer":
+            return self.export_treasury(queryset, start_date, end_date)
 
-            elif user.role.name == "Treasurer":
-                row = [
-                    f"RR-{rr.id:04d}",
-                    f"{rr.requester.first_name} {rr.requester.last_name}",
-                    rr.store.region.name if rr.store and rr.store.region else "",
-                    rr.store.name if rr.store else "",
-                    f"{rr.store.area_manager.first_name} {rr.store.area_manager.last_name}"
-                    if rr.store and rr.store.area_manager
-                    else "",
-                    rr.total_amount,
-                    rr.disbursement_status.capitalize(),
-                    rr.created_at.strftime("%Y-%m-%d"),
-                    rr.bank.bank_name if rr.bank else "",
-                    rr.account.account_name if rr.account else "",
-                ]
+        return self.export_default(queryset, user, start_date, end_date)
 
-            elif user.role.name == "Area Manager":
-                row = [
-                    f"RR-{rr.id:04d}",
-                    f"{rr.requester.first_name} {rr.requester.last_name}",
-                    rr.store.name if rr.store else "",
-                    rr.total_amount,
-                    rr.status.capitalize(),
-                    rr.created_at.strftime("%Y-%m-%d"),
-                ]
 
-            else:  # Restaurant Manager
-                row = [
-                    f"RR-{rr.id:04d}",
-                    rr.store.name if rr.store else "",
-                    rr.total_amount,
-                    rr.status.capitalize(),
-                    rr.created_at.strftime("%Y-%m-%d"),
-                ]
-
-            sheet.append(row)
-
-        # auto column widths
-        for col in sheet.columns:
-            max_length = max((len(str(cell.value)) for cell in col if cell.value), default=0)
-            sheet.column_dimensions[col[0].column_letter].width = max_length + 2
-
-        # build response
-        response = HttpResponse(
-            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-        response["Content-Disposition"] = f'attachment; filename="{file_name}"'
-        workbook.save(response)
-        return response
 
 
 class DisbursemntView(APIView):
@@ -744,29 +985,38 @@ class DisbursemntView(APIView):
     
     # Disburse a reimbursement request and its items
     def post(self, request, pk):
-        reimbursement = get_object_or_404(Reimbursement, pk=pk)
-        
-        if reimbursement.disbursement_status != 'pending':
-            return CustomResponse(False, "The selected reimbursement is not a pending disbursement", 400)
-        
-        reimbursement.disbursement_status = 'disbursed'
-        reimbursement.treasurer = request.user
-        bank_id = request.data.get('bank')
-        account_id = request.data.get('account')
-        reimbursement.bank = get_object_or_404(Bank, id=bank_id)
-        reimbursement.account = get_object_or_404(Account, id=account_id)
-        reimbursement.disbursed_at = timezone.now()
-           
+
+        try:
+            bank_id = request.data.get('bank', None)
+            # account_id = request.data.get('account', None)
+
+            if not bank_id:
+                return CustomResponse(False, "Bank and account IDs are required", 400)
+
+            reimbursement = get_object_or_404(Reimbursement, pk=pk)
+            if reimbursement.disbursement_status != 'pending':
+                return CustomResponse(False, "The selected reimbursement is not a pending disbursement", 400)
             
-        reimbursement.updated_by = request.user
-        reimbursement.save(user=request.user)
+            reimbursement.bank = get_object_or_404(Bank, pk=bank_id)
+            # reimbursement.account = get_object_or_404(Account, pk=account_id)
+            
+            reimbursement.disbursement_status = 'disbursed'
+            reimbursement.treasurer = request.user
+            reimbursement.disbursed_at = timezone.now()
+            reimbursement.updated_by = request.user
+            reimbursement.save(user=request.user)
 
-        sap_payload = build_sap_payload(reimbursement)
+            # Payload to be posted to SAP
+            payload = build_sap_payload(reimbursement)
 
+            # Make a post to SAP
+
+            # UPDATE STORE BALANCE
+            message = f"Reimbursement disbursed by Treasurer successfully"
+            return CustomResponse(True, message, 200)
         
-        message = f"Reimbursement disbursed by Treasurer successfully"
-
-        return CustomResponse(True, message, 200)
+        except Exception as err:
+            return CustomResponse(False, "Unable to disburse expense", 400, {"error":str(err)})
     
 class BulkDisbursementView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
@@ -779,8 +1029,6 @@ class BulkDisbursementView(APIView):
         if not isinstance(ids, list) or not all(isinstance(i, int) for i in ids):
             return CustomResponse(False, "Invalid 'ids' format. Must be a list of integers.", 400)
         
-        
-        
         reimbursements = Reimbursement.objects.filter(id__in=ids)
         updated_count = 0
         
@@ -790,14 +1038,13 @@ class BulkDisbursementView(APIView):
             reimbursement.disbursement_status = 'disbursed'
             reimbursement.treasurer = request.user
             bank_id = request.data.get('bank')
-            account_id = request.data.get('account')
+            # account_id = request.data.get('account')
             reimbursement.bank = get_object_or_404(Bank, id=bank_id)
-            reimbursement.account = get_object_or_404(Account, id=account_id)
+            # reimbursement.account = get_object_or_404(Account, id=account_id)
             reimbursement.disbursed_at = timezone.now()
             reimbursement.updated_by = request.user
             reimbursement.save(user=request.user)
             updated_count += 1
-        
         return CustomResponse(True, f"{updated_count} reimbursement(s) disbursed successfully", 200)
     
-        
+    

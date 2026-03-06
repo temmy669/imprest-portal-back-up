@@ -2,12 +2,14 @@ from django.shortcuts import render
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.generics import ListAPIView
 from utils.permissions import *
 from .models import Bank, Account
 from .serializers import BankSerializer, AccountSerializer
 from helpers.response import CustomResponse
 from users.auth import JWTAuthenticationFromCookie
 from utils.pagination import DynamicPageSizePagination
+from services.byd import api
 
 class BankView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
@@ -15,7 +17,7 @@ class BankView(APIView):
     serializer_class = BankSerializer
     
     def get(self, request):
-        banks = Bank.objects.all()
+        banks = Bank.objects.all().order_by('-created_at')
         #search banks
         search_query = request.query_params.get('search', None)
         if search_query:
@@ -26,7 +28,10 @@ class BankView(APIView):
         banks = paginator.paginate_queryset(banks, request)
             
         serializer = BankSerializer(banks, many=True)
-        return CustomResponse(True, "banks returned successfully", 200, serializer.data)
+        return CustomResponse(True, "banks returned successfully", 200, {"count": paginator.page.paginator.count,
+                                                                        "next": paginator.get_next_link(),
+                                                                        "previous": paginator.get_previous_link(),
+                                                                        "results": serializer.data })
     
     def post(self, request):
         
@@ -62,3 +67,34 @@ class AccountListByBankView(APIView):
         accounts = Account.objects.filter(bank_id=bank_id)
         serializer = AccountSerializer(accounts, many=True)
         return CustomResponse(True, "success", 200, serializer.data)
+
+class BankListView(APIView):
+    authentication_classes = [JWTAuthenticationFromCookie]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        #list the banks with just their names
+        banks = Bank.objects.all().values('id', 'bank_name')
+        return CustomResponse(True, "success", 200, list(banks))
+    
+class ListBanksView(APIView):
+    """Get the list of banks from the BYD. """
+    def get(self, request):
+        page=request.query_params.get("page")
+        size=request.query_params.get("size")
+        search=request.query_params.get("search")
+        try:
+            banks = api.get_banks(page=page, size=size, search=search)
+            return CustomResponse(
+                valid=True, 
+                msg="Banks successfully retrieved from BYD", 
+                status=200, 
+                data=banks)
+        except Exception as err:
+            return CustomResponse(
+                valid=False, 
+                msg="Unable to retrieve banks from BYD", 
+                status=400, 
+                data={
+                    "error":str(err)
+                })
