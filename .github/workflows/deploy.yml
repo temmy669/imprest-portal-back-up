@@ -3,7 +3,7 @@ name: Deploy to Production Server
 on:
   push:
     # branches: [ feature/response ]
-    branches: [main]
+    branches: [staging]
 
 jobs:
   deploy:
