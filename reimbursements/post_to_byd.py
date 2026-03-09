@@ -1,4 +1,6 @@
 from decimal import Decimal
+from django.utils import timezone
+from byd_service.gl_posting import post_to_byd
 
 CURRENCY_CODE = "NGN"
 
@@ -6,7 +8,7 @@ CURRENCY_CODE = "NGN"
 DEFAULT_BANK_GL_CODE = "212003"   # example: imprest / bank clearing GL
 
 
-def build_sap_payload(reimbursement):
+def _build_sap_payload(reimbursement):
     """
     Build SAP posting payload from a Reimbursement instance.
 
@@ -76,3 +78,24 @@ def build_sap_payload(reimbursement):
         )
 
     return payload
+
+
+def update_sap_record(reimbursements:list=[]):
+    """Update the SAP with the current transactions. """
+    items = []
+    try:
+        if reimbursements:
+            for reimbursement in reimbursements:
+                payload = _build_sap_payload(reimbursement)
+                items.append(payload)
+            current_date = timezone.now().strftime("%d-%M-%Y")
+            # post = post_to_byd(current_date=current_date,items=items)
+            post = None
+            print(" | Current Date", current_date)
+            print(" | Items ==> ", items)
+            print(" | Reimbursements ==> ", reimbursement)
+            return True, post
+        return False, None
+    except Exception as err:
+        return False, None
+    

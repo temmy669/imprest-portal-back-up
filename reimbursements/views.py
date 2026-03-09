@@ -39,7 +39,7 @@ import re
 from utils.receipt_validation import validate_receipt
 from django.db import transaction
 from utils.email_utils import send_reimbursement_rejection_notification, send_reimbursement_approval_notification
-from .post_to_byd import build_sap_payload
+from .post_to_byd import update_sap_record
 from roles.models import Role
 
 class ReimbursementRequestView(APIView):
@@ -1007,9 +1007,7 @@ class DisbursemntView(APIView):
             reimbursement.save(user=request.user)
 
             # Payload to be posted to SAP
-            payload = build_sap_payload(reimbursement)
-
-            # Make a post to SAP
+            is_posted = update_sap_record(reimbursements=[reimbursement])
 
             # UPDATE STORE BALANCE
             message = f"Reimbursement disbursed by Treasurer successfully"
@@ -1045,6 +1043,7 @@ class BulkDisbursementView(APIView):
             reimbursement.updated_by = request.user
             reimbursement.save(user=request.user)
             updated_count += 1
+        is_posted = update_sap_record(reimbursements=reimbursements)
         return CustomResponse(True, f"{updated_count} reimbursement(s) disbursed successfully", 200)
     
     
