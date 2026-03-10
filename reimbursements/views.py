@@ -1,3 +1,4 @@
+import logging
 from collections import Counter
 from rest_framework.generics import get_object_or_404
 from utils.pagination import DynamicPageSizePagination
@@ -41,6 +42,8 @@ from django.db import transaction
 from utils.email_utils import send_reimbursement_rejection_notification, send_reimbursement_approval_notification
 from .post_to_byd import update_sap_record
 from roles.models import Role
+
+logger = logging.getLogger(__name__)
 
 class ReimbursementRequestView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
@@ -985,7 +988,6 @@ class DisbursemntView(APIView):
     
     # Disburse a reimbursement request and its items
     def post(self, request, pk):
-
         try:
             bank_id = request.data.get('bank', None)
             # account_id = request.data.get('account', None)
@@ -1008,6 +1010,11 @@ class DisbursemntView(APIView):
 
             # Payload to be posted to SAP
             is_posted = update_sap_record(reimbursements=[reimbursement])
+            print("is posted")
+            if is_posted:
+                logger.info("Reimbursement update successfully posted to BYD")
+            else:
+                logger.warning("Failed to post reimbursement update to BYD.")
 
             # UPDATE STORE BALANCE
             message = f"Reimbursement disbursed by Treasurer successfully"
@@ -1029,6 +1036,7 @@ class BulkDisbursementView(APIView):
         
         reimbursements = Reimbursement.objects.filter(id__in=ids)
         updated_count = 0
+        reimbursements_data = []
         
         for reimbursement in reimbursements:
             if reimbursement.disbursement_status != 'pending':
@@ -1042,8 +1050,16 @@ class BulkDisbursementView(APIView):
             reimbursement.disbursed_at = timezone.now()
             reimbursement.updated_by = request.user
             reimbursement.save(user=request.user)
+            reimbursements_data.append(reimbursement)
             updated_count += 1
-        is_posted = update_sap_record(reimbursements=reimbursements)
+            
+        is_posted = update_sap_record(reimbursements=reimbursements_data)
+        print("is posted", is_posted, reimbursements_data)
+        if is_posted:
+                logger.info("Reimbursement update successfully posted to BYD")
+        else:
+            logger.warning("Failed to post reimbursement update to BYD.")
+        
         return CustomResponse(True, f"{updated_count} reimbursement(s) disbursed successfully", 200)
     
     

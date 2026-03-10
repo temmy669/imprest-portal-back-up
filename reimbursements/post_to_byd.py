@@ -25,7 +25,6 @@ def _build_sap_payload(reimbursement):
         raise ValueError("Reimbursement store/profit centre is missing")
 
     payload = []
-
     profit_centre = reimbursement.store.code
 
     # -------------------------------
@@ -42,7 +41,6 @@ def _build_sap_payload(reimbursement):
     }
 
     payload.append(credit_line)
-
     # -------------------------------
     # DEBIT LINES (Expenses)
     # -------------------------------
@@ -87,15 +85,11 @@ def update_sap_record(reimbursements:list=[]):
         if reimbursements:
             for reimbursement in reimbursements:
                 payload = _build_sap_payload(reimbursement)
-                items.append(payload)
+                items.extend(payload)
             current_date = timezone.now().strftime("%d-%M-%Y")
-            # post = post_to_byd(current_date=current_date,items=items)
-            post = None
-            print(" | Current Date", current_date)
-            print(" | Items ==> ", items)
-            print(" | Reimbursements ==> ", reimbursement)
-            return True, post
-        return False, None
+            post = post_to_byd(current_date=current_date, items=items)
+            return post
+        return False
     except Exception as err:
-        return False, None
+        return False
     
