@@ -19,7 +19,7 @@ from django.http import HttpResponse
 from collections import Counter
 from datetime import datetime
 from django.db.models import Q
-from utils.email_utils import send_rejection_notification, send_approval_notification
+from utils.email_utils import send_rejection_notification, send_approval_notification, send_creation_notification
 from django.db import transaction
 
 class PurchaseRequestView(APIView):
@@ -28,6 +28,7 @@ class PurchaseRequestView(APIView):
     """
     serializer_class = PurchaseRequestSerializer
     authentication_classes = [JWTAuthenticationFromCookie]
+    
     def get_permissions(self):
         if self.request.method == 'GET':
             return [IsAuthenticated(), ViewPurchaseRequest()]
@@ -109,9 +110,17 @@ class PurchaseRequestView(APIView):
                     requester=request.user,
                     total_amount=total_amount
                 )
-
+                try:
+                    send_creation_notification(purchase_request)
+                except Exception as err:
+                    print(f"failed to send PR creation email: {err}")
+                    pass
                 return CustomResponse(True, "Purchase Request Created Successfully", 201, serializer.data)
-            return CustomResponse(False, serializer.errors)
+            return CustomResponse(
+                valid=False,
+                msg="Unable to create Purchase request", 
+                status=400, 
+                data=serializer.errors)
         except Exception as err:
             return CustomResponse(False, "Unable to create purchase request", 400, {"error":str(err)})
             

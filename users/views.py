@@ -6,6 +6,7 @@ from helpers.exceptions import CustomValidationException
 from helpers.response import CustomResponse
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.generics import UpdateAPIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import status
 from django.views import View
@@ -262,28 +263,59 @@ class UserView(APIView):
    
     def post(self, request):
         """
-        Add a user to the system.
-         """
-         
-        serializer = UserSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return CustomResponse(True, "User Created successfully", data=serializer.data)
-        return CustomResponse(False, serializer.errors, 400)
-    
+            Add a user to the system.
+        """
+        try:
+            serializer = UserSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return CustomResponse(True, "User Created successfully", data=serializer.data)
+        except Exception as err:
+            return CustomResponse(
+                valid=False, 
+                msg="Unable to onboard User", 
+                status=400,
+                data=serializer.errors)
+        
     def put(self, request, pk):
-        user = get_object_or_404(User, pk=pk)
+        try:
+            user = get_object_or_404(User, pk=pk)
+            # CRITICAL: Use partial=True for PATCH requests
+            serializer = UserUpdateSerializer(user, data=request.data, partial=True)
+            # CRITICAL: Use raise_exception=True to ensure validation errors return 400
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return CustomResponse(
+                valid=True, 
+                msg="User updated successfully",
+                status=200)
+        except Exception as err:
+            return CustomResponse(
+                valid=False,
+                msg="Unable to update user",
+                status=400
+            )
         
-        # CRITICAL: Use partial=True for PATCH requests
-        serializer = UserUpdateSerializer(user, data=request.data, partial=True)
-        
-        # CRITICAL: Use raise_exception=True to ensure validation errors return 400
-        serializer.is_valid(raise_exception=True)
-        
-        serializer.save()
-        return CustomResponse(True, {
-         "User updated successfully",
-        }, 200)
+    def patch(self, request, pk):
+        try:
+            user = get_object_or_404(User, pk=pk)
+            # CRITICAL: Use partial=True for PATCH requests
+            serializer = UserUpdateSerializer(user, data=request.data, partial=True)
+            
+            # CRITICAL: Use raise_exception=True to ensure validation errors return 400
+            serializer.is_valid(raise_exception=True)
+            
+            serializer.save()
+            return CustomResponse(
+                valid=True, 
+                msg="User updated successfully",
+                status=200)
+        except Exception as err:
+            return CustomResponse(
+                valid=False,
+                msg="Unable to update user",
+                status=400
+            )
         
     def delete(self, request):
         """
@@ -299,6 +331,11 @@ class UserView(APIView):
             return CustomResponse(True,  "User deleted successfully", 200)
         except User.DoesNotExist:
             return CustomResponse(False, "User not found", 404)
+
+class UpdateUserView(UpdateAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_class = [IsAuthenticated]
     
 class SearchUserView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]

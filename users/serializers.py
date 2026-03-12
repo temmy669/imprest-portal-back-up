@@ -63,7 +63,7 @@ class UserSerializer(serializers.ModelSerializer):
         else:
             role = role_data  # Already a Role instance
     
-        assigned_stores = validated_data.pop('assigned_stores', [])
+        assigned_stores_ids = validated_data.pop('assigned_stores', [])
         store = validated_data.pop('store', None)
         email = validated_data.get('email')
     
@@ -77,8 +77,10 @@ class UserSerializer(serializers.ModelSerializer):
         user.save()
     
         if role and role.name == 'Area Manager':
-            user.assigned_stores.set(assigned_stores)
+            user.assigned_stores.set(assigned_stores_ids)
             user.store = None
+            assigned_stores = user.assigned_stores.all()
+            assigned_stores.update(area_manager=user)
         else:
             user.assigned_stores.clear()
             user.store = store

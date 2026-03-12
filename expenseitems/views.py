@@ -1,19 +1,17 @@
-from django.shortcuts import render
+
 from rest_framework.views import APIView
 from utils.permissions import IsSuperUserOrReadOnly
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.generics import ListAPIView
 from users.auth import JWTAuthenticationFromCookie
 from django.shortcuts import get_object_or_404
 from helpers.response import CustomResponse
-from helpers.exceptions import CustomValidationException
 from .models import ExpenseItem
 from .serializers import ItemSerializer
 from utils.pagination import DynamicPageSizePagination
 from rest_framework.exceptions import ValidationError
 from services.byd import api as byd
-# Create your views here.
 
+# Create your views here.
 class ExpenseItemView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
     permission_classes = [IsAuthenticated, IsSuperUserOrReadOnly]
@@ -24,7 +22,6 @@ class ExpenseItemView(APIView):
             items = ExpenseItem.objects.all().order_by('-created_at')
             if param and param not in ["true", "false"]:
                 raise ValidationError("Invalid query param. value must be either 'true' or 'false'")
-            
             #Search query
             search_query = request.query_params.get('search', None)
             if search_query:
@@ -47,9 +44,7 @@ class ExpenseItemView(APIView):
                                     "results": serializer.data,
                                     })
             else:
-                print("items", items)
                 all_items = ItemSerializer(items, many=True).data
-                print("items", items)
                 return CustomResponse(
                     True,
                     "Items retrieved Successfully",
@@ -66,36 +61,40 @@ class ExpenseItemView(APIView):
                 }
             )
 
-        
-    
     def post(self, request):
         """Creates a new Expense Item"""
-        serializer = ItemSerializer(data=request.data)
-        if serializer.is_valid():
-            
-            serializer.save()
-            return CustomResponse(True, "Item Added", 201, data=serializer.data)
-        return CustomValidationException(serializer.errors, 400)
+        try:
+            serializer = ItemSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return CustomResponse(True, "Item Added", 201, data=serializer.data)
+            return CustomResponse(False, "Unable to add expense item", 400)
+        except Exception as err:
+            return CustomResponse(False, "Unable to add expense item", 400)
     
     
     def put(self, request, pk):
         """Updates Expense Item"""
-        
-        item = get_object_or_404(ExpenseItem, pk=pk)
-        serializer = ItemSerializer(item, data=request.data, partial=True)
-        
-        if serializer.is_valid():
-            updated_item = serializer.save()
+        try:
+            item = get_object_or_404(ExpenseItem, pk=pk)
+            serializer = ItemSerializer(item, data=request.data, partial=True)
             
-            return CustomResponse(True, f"item updated successfully", 200, serializer.data)
-
-        return CustomResponse(False, serializer.errors, 400)
-    
+            if serializer.is_valid():
+                updated_item = serializer.save()
+                
+                return CustomResponse(True, f"item updated successfully", 200, serializer.data)
+            return CustomResponse(False, "Unable to update expense item", 400)
+        except Exception as err:
+            return CustomResponse(False, "Unable to update expense item", 400)
+        
     def delete(self, request, pk):
         """Deletes an Expense Item"""
-        item = get_object_or_404(ExpenseItem, pk=pk)
-        item.delete()
-        return CustomResponse(True, "Item Deleted Successfully", 200)
+        try:
+            item = get_object_or_404(ExpenseItem, pk=pk)
+            item.delete()
+            return CustomResponse(True, "Item Deleted Successfully", 200)
+        except Exception as err:
+            return CustomResponse(False, "Unable to remove expense item", 400)
     
 
 class ListExpenseItemsView(APIView):
@@ -106,7 +105,6 @@ class ListExpenseItemsView(APIView):
             size=request.query_params.get("size")
             search=request.query_params.get("search")
             expense_items = byd.get_expense_items(page=page, size=size, search=search)
-            print("expense items ==> ", expense_items)
             return CustomResponse(
                 valid=True,
                 msg="Expense Items retrieved successfully", 

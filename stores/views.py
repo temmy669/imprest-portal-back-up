@@ -26,21 +26,44 @@ class StoreListView(APIView):
     - Used to populate the store dropdown in UI
     """
     def get(self, request):
-        """
-        Handles GET requests for store listing.
-        """
-        stores = Store.objects.all()
-        
-        #filter stores by provided area managers
-        area_manager_ids = request.query_params.getlist('area_manager')
-        
-        if area_manager_ids:
-            stores = stores.filter(area_manager__id__in=area_manager_ids)
+        try:
+            """
+            Handles GET requests for store listing.
+            
+            Query Parameters:
+                area_manager: List of area manager IDs (integer) — optional, multiple allowed
+                            Example: ?area_manager=5&area_manager=12
+            """
+            queryset = Store.objects.all()
+            area_manager_ids = request.query_params.getlist('area_manager')
+            print("area manager ids ==> ", area_manager_ids)
 
+            if area_manager_ids:
+                try:
+                    # Convert to int and filter out invalid values
+                    valid_ids = [int(pid) for pid in area_manager_ids]
+                    print("ID", area_manager_ids, valid_ids)
+                    if valid_ids:  # only filter if we have at least one valid ID
+                        queryset = queryset.filter(area_manager__id__in=valid_ids)
+                    # else: silently ignore bad values (you could also return 400 here)
+                except ValueError:
+                    # Could return 400 Bad Request instead of silently failing
+                    pass
+            serializer = StoreSerializer(queryset, many=True)
+            return CustomResponse(
+                valid=True,
+                status=200,
+                msg="Stores returned successfully",
+                data=serializer.data
+            )
+        except Exception as err:
+            return CustomResponse(
+                valid=False,
+                status=400,
+                msg="Unable to fetch Stores",
+                data=serializer.errors
+            )
         
-        serializer = StoreSerializer(stores, many=True)
-        return CustomResponse(True, "Stores returned Successfully", data=serializer.data)
-    
 class StoreListFromSAPView(APIView):
     """
     API endpoint for retrieving all stores from SAP.
@@ -139,11 +162,9 @@ class AssignStoresToUserView(APIView):
         - store_ids: List of store IDs to assign (in request body)
         """
         store_ids = request.data.get('store_ids', [])
-        
         try:
             # Verify user exists
             user = User.objects.get(pk=user_id)
-            
             # Get all valid stores from the provided IDs
             stores = Store.objects.filter(id__in=store_ids)
             
@@ -157,13 +178,9 @@ class AssignStoresToUserView(APIView):
             ).exclude(area_manager=user)
 
             if conflicting_stores.exists():
-                return Response(
-                    {
-                        "success": False,
-                        "error": "Some selected stores already have an area manager.",
-                        "detail": "Please choose stores without assigned managers."
-                    },
-                    status=status.HTTP_400_BAD_REQUEST
+                return CustomResponse(
+                    status=False,
+                    msg="Some selected stores already have an area manager."
                 )
 
             # Append new stores to user’s existing list
@@ -172,22 +189,16 @@ class AssignStoresToUserView(APIView):
             # Update area manager on the store objects
             stores.update(area_manager=user)
             
-            return Response(
-                {
-                    "success": True,
-                    "message": "Stores assigned successfully",
-                    "assigned_stores": [store.code for store in stores]  # Return store codes for confirmation
-                },
-                status=status.HTTP_200_OK
+            return CustomResponse(
+                valid=True,
+                status=200,
+                msg="Store successfully assigned"
             )
             
         except User.DoesNotExist:
-            return Response(
-                {
-                    "success": False,
-                    "error": "User not found",
-                    "detail": f"No user exists with ID {user_id}"
-                },
+            return CustomResponse(
+                valid=True,
+                msg="Unable to assign stores to User",
                 status=status.HTTP_404_NOT_FOUND
             )
 
@@ -323,13 +334,11 @@ class StoreBudgetView(APIView):
                     comment=request.data.get("comment"),
                     updated_by=request.user if request.user.is_authenticated else None
                 )
-                
             # Update balance if needed
             if store.balance == 0:
                 store.balance = new_budget
                 store.save(update_fields=['balance'])
 
             return CustomResponse(True, "Budget updated successfully", 200, serializer.data)
-
         return CustomResponse(False, serializer.errors, 400)
 

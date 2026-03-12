@@ -3,12 +3,11 @@ name: Deploy to Production Server
 on:
   push:
     # branches: [ feature/response ]
-    branches: [main]
+    branches: [staging]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4

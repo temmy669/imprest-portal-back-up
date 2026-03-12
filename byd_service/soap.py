@@ -1,0 +1,36 @@
+import os
+from requests import Session
+from requests.auth import HTTPBasicAuth  # or HTTPDigestAuth, or OAuth1, etc.
+from zeep import Client
+from zeep.transports import Transport
+from pathlib import Path
+from decouple import config
+
+from .authenticate import SAPAuthentication
+
+# dotenv_path = os.path.join(Path(__file__).resolve().parent.parent, '.env')
+# load_dotenv(dotenv_path)
+
+class SOAPServices:
+
+	def __init__(self, wsdl_path: str = None):
+		"""
+			Initialize the SOAP client and authenticate with SAP.
+		"""
+		self.client = None
+		self.soap_client = None
+		self.wsdl_path = wsdl_path
+
+	def connect(self, ):
+		transport = Transport(timeout=5, operation_timeout=3)
+		client = Client(self.wsdl_path, transport=transport)
+		sap_auth = self._sap_authentication()
+		client.transport.session.auth = sap_auth.http_authentication()
+		self.client = client	
+	
+	def _sap_authentication(self, ):
+		# Return the authenticat	ion class
+		return SAPAuthentication(
+			username=config('SAP_COMM_USER'),
+			password=config('SAP_COMM_PASS')
+		)

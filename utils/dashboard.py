@@ -22,7 +22,6 @@ class DashboardView(APIView):
     def _get_user_stores(self, user, store_IDs=None):
         """Get stores based on user role and optional store filter"""
         role_name = getattr(getattr(user, "role", None), "name", "").strip()
-        print("user role", role_name)
 
         if role_name == "Restaurant Manager":
             return Store.objects.filter(id=user.store_id)
@@ -137,10 +136,9 @@ class DashboardView(APIView):
         # Get the ISO week number of the first day of the month
         first_day_of_month = date(date_.year, date_.month, 1)
         _, first_day_week_of_year, _ = first_day_of_month.isocalendar()
-        
+
         # If the first week of the month belongs to the previous year's last week (ISO standard behavior),
         # the simple subtraction needs adjustment. However, for a basic calculation:
-        
         # This subtraction gives the difference in week numbers. Add 1 because we're 1-indexing the weeks.
         week_in_month = current_week_of_year - first_day_week_of_year + 1
         
@@ -150,8 +148,13 @@ class DashboardView(APIView):
             # in the context of ISO week numbering, so we set it to 1.
             week_in_month = 1 
 
-        print("Week of the month ==> ", week_in_month)
-        return week_in_month
+        return 
+    
+
+    def current_month_week_number(self) -> int:
+        """Returns the week number (1–5 or 1–6) of the current month"""
+        today = datetime.now()
+        return ((today.day - 1) // 7) + 1
         
 
     def get(self, request):
@@ -165,7 +168,6 @@ class DashboardView(APIView):
         year = int(request.query_params.get("year", now.year))
         week_number = request.query_params.get("week", None)
     
-
         # Get Store filter
         store_ids = request.query_params.getlist("store", [])
         stores = self._get_user_stores(user, store_IDs=store_ids)
@@ -174,7 +176,7 @@ class DashboardView(APIView):
         print("Stores", stores.values_list("id"))
 
         # --- Calculate Weekly Period ---
-        print("Current Week Number ==> ", self._get_current_week_month())
+        print("Current Week Number ==> ", self.current_month_week_number())
         if week_number:
             # Specific week requested
             try:
@@ -182,13 +184,13 @@ class DashboardView(APIView):
                 week_start, week_end = self._get_week_range(year, month, week_num)
             except:
                 # Fallback to current accounting period
-                week_start, week_end = self._get_week_range(year, month, self._get_current_week_month())
+                week_start, week_end = self._get_week_range(year, month, self.current_month_week_number())
         else:
             # If no week number is specified, get the number of the current week
             # if multiple store is selected, use current week to get the week start and end dates
             # week_start = self._get_current_accounting_period(stores)
             # week_end = week_start + timedelta(days=6, hours=23, minutes=59, seconds=59)
-            week_start, week_end = self._get_week_range(year, month, self._get_current_week_month())
+            week_start, week_end = self._get_week_range(year, month, self.current_month_week_number())
 
         # --- Set date range for month ---
         start_month = timezone.make_aware(datetime(year, month, 1))
@@ -315,9 +317,9 @@ class DashboardView(APIView):
                 "role": user.role.name if user.role else None,
                 "stores_count": stores.count(),
                 # "selected_store": int(store_param) if store_param else None,
-                # "selected_year": year,
-                # "selected_month": month,
-                # "selected_week": int(week_number) if week_number else None,
+                "selected_year": year,
+                "selected_month": month,
+                "selected_week": int(week_number) if week_number else self.current_month_week_number(),
                 # "available_weeks": available_weeks,
                 "week_period": {
                     "start": week_start.strftime("%Y-%m-%d"),
