@@ -81,7 +81,7 @@ class ReimbursementRequestView(APIView):
             queryset = queryset.filter(store__in=user.assigned_stores.all())
         elif user.role.name == 'Internal Control':
             queryset = queryset.filter(
-                Q(status__in=['approved', 'pending']) & 
+                Q(status__in=['approved']) & 
                 Q( Q(internal_control=user) | Q(internal_control__isnull=True)))
         elif user.role.name == 'Treasurer':
             queryset = queryset.filter(internal_control_status='approved')

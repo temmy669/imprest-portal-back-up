@@ -25,10 +25,12 @@ class ReimbursementCommentSerializer(serializers.ModelSerializer):
     
     def to_representation(self, instance):
         rep = super().to_representation(instance)
-        rep['author'] = f"{instance.author.first_name} {instance.author.last_name}"
+        rep['author'] = (
+            f"{instance.author.first_name} {instance.author.last_name}"
+            if instance.author else None
+        )
         rep['created_at'] = instance.created_at.strftime('%d-%m-%Y %H:%M:%S')
-        rep['role'] = instance.author.role.name if instance.author.role else None
-        
+        rep['role'] = instance.author.role.name if instance.author and instance.author.role else None
         return rep
 
 class ReimbursementItemSerializer(serializers.ModelSerializer):
