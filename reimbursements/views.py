@@ -63,7 +63,6 @@ class ReimbursementRequestView(APIView):
 
         # Get filters
         area_manager_ids = request.query_params.getlist("area_manager")
-       
         store_ids = request.query_params.getlist("stores")
         start_date = request.query_params.get("start_date")
         end_date = request.query_params.get("end_date")
@@ -81,103 +80,79 @@ class ReimbursementRequestView(APIView):
             queryset = queryset.filter(store__in=user.assigned_stores.all())
         elif user.role.name == 'Internal Control':
             queryset = queryset.filter(
-                Q(status__in=['approved']) & 
-                Q( Q(internal_control=user) | Q(internal_control__isnull=True)))
+                Q(status__in=['approved']) &
+                Q(Q(internal_control=user) | Q(internal_control__isnull=True)))
         elif user.role.name == 'Treasurer':
             queryset = queryset.filter(internal_control_status='approved')
-        
-        # Determine which field represents status for the user role
+
+        # Determine status field for this role
         if user.role.name == 'Treasurer':
             status_field = 'disbursement_status'
         elif user.role.name == 'Internal Control':
             status_field = 'internal_control_status'
-
         else:
             status_field = 'status'
 
-        # Keep a base queryset for status count BEFORE applying query param filters
-        base_queryset_for_status_count = queryset
-        status_filter = False
+        # Validate search_query before filters
+        if search_query and not search_query.upper().startswith("RR-"):
+            return CustomResponse(False, "Only RR-XXXX search is supported in 'q'", 400)
 
-        # Calculate status counts across all statuses BEFORE query param filters
-        # status_counts_all = (
-        #     base_queryset_for_status_count
-        #     .values(status_field)
-        #     .annotate(count=Count(status_field))
-        #     .order_by()
-        # )
-        # print("Status count all ==> ", status_counts_all)
-        # status_count_dict = {item[status_field]: item["count"] for item in status_counts_all}
+        def apply_common_filters(qs):
+            if area_manager_ids:
+                qs = qs.filter(store__area_manager__id__in=area_manager_ids)
+            if store_ids:
+                qs = qs.filter(store_id__in=store_ids)
+            if region_id:
+                qs = qs.filter(store__region_id=region_id)
+            if start_date:
+                try:
+                    qs = qs.filter(created_at__date__gte=datetime.strptime(start_date, "%Y-%m-%d").date())
+                except ValueError:
+                    pass
+            if end_date:
+                try:
+                    qs = qs.filter(created_at__date__lte=datetime.strptime(end_date, "%Y-%m-%d").date())
+                except ValueError:
+                    pass
+            if disbursement_status:
+                qs = qs.filter(disbursement_status=disbursement_status)
+            if search:
+                qs = qs.filter(
+                    Q(requester__first_name__icontains=search) |
+                    Q(requester__last_name__icontains=search)
+                )
+            if search_query:
+                try:
+                    request_id = int(search_query.upper().replace("RR-", ""))
+                    qs = qs.filter(id=request_id)
+                except ValueError:
+                    pass
+            return qs
 
-        # --- Now apply filters ---
-        if area_manager_ids:
-            queryset = queryset.filter(store__area_manager__id__in=area_manager_ids)
+        # count_queryset follows all filters EXCEPT status — feeds the tab counts
+        count_queryset = apply_common_filters(queryset)
 
-        if disbursement_status:
-            queryset = queryset.filter(disbursement_status=disbursement_status)
-
-        if store_ids:
-            queryset = queryset.filter(store_id__in=store_ids)
-            base_queryset_for_status_count = queryset
-
-        if region_id:
-            queryset = queryset.filter(store__region_id=region_id)
-
-        if start_date:
-            try:
-                queryset = queryset.filter(created_at__date__gte=datetime.strptime(start_date, "%Y-%m-%d").date())
-            except ValueError:
-                pass
-
-        if end_date:
-            try:
-                queryset = queryset.filter(created_at__date__lte=datetime.strptime(end_date, "%Y-%m-%d").date())
-            except ValueError:
-                pass
-
+        # queryset follows ALL filters INCLUDING status — feeds the results list
+        queryset = apply_common_filters(queryset)
         if status:
             queryset = queryset.filter(status=status)
-        
         if internal_control_status:
             if internal_control_status in ["declined", "approved"]:
                 queryset = queryset.filter(
-                internal_control_status=internal_control_status, internal_control=user)
+                    internal_control_status=internal_control_status, internal_control=user)
             else:
                 queryset = queryset.filter(internal_control_status=internal_control_status)
 
-        if search:
-            queryset = queryset.filter(
-                Q(requester__first_name__icontains=search) |
-                Q(requester__last_name__icontains=search)
-            )
-
-        if search_query:
-            if search_query.upper().startswith("RR-"):
-                try:
-                    request_id = int(search_query.upper().replace("RR-", ""))
-                    queryset = queryset.filter(id=request_id)
-                except ValueError:
-                    return CustomResponse(False, "Invalid request ID format. Expected RR-XXXX", 400)
-            else:
-                return CustomResponse(False, "Only RR-XXXX search is supported in 'q'", 400)
-        
-    
-        # #return empty status count if queryset is empty after filters
-        # if not queryset.exists():
-        #     status_count_dict = {}
-        
-        # STATUS COUNT
+        # Status counts
         status_counts_all = (
-            base_queryset_for_status_count
+            count_queryset
             .values(status_field)
             .annotate(count=Count(status_field))
             .order_by()
         )
-
-        print("Status count all ==> ", status_counts_all)
         status_count_dict = {item[status_field]: item["count"] for item in status_counts_all}
-        
-        # --- Pagination and serialization ---
+
+        # Pagination and serialization
         paginator = DynamicPageSizePagination()
         paginated_queryset = paginator.paginate_queryset(queryset, request)
         serializer = ReimbursementSerializer(paginated_queryset, many=True)
@@ -191,10 +166,9 @@ class ReimbursementRequestView(APIView):
                 "next": paginator.get_next_link(),
                 "previous": paginator.get_previous_link(),
                 "results": serializer.data,
-                "status_counts": status_count_dict, 
+                "status_counts": status_count_dict,
             },
-        )
-        
+        )        
 
     def post(self, request):
         # Step 1: Create reimbursement (draft by default)
