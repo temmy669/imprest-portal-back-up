@@ -10,6 +10,7 @@ CURRENCY_CODE = "NGN"
 # GL code for the bank/imprest credit line — matches the SAP chart of accounts
 DEFAULT_BANK_GL_CODE = "212003"
 
+
 def _build_sap_payload(reimbursement):
     """
     Build SAP GL posting payload from a Reimbursement instance.
@@ -62,7 +63,7 @@ def _build_sap_payload(reimbursement):
     credit_line = {
         "DebitCreditCode": "2",
         "ProfitCentreID": profit_centre,
-        "ChartOfAccountsItemCode": "212003",
+        "ChartOfAccountsItemCode": 212003,
         "TransactionCurrencyAmount": {
             "_value_1": float(reimbursement.total_amount),
             "currencyCode": CURRENCY_CODE,
