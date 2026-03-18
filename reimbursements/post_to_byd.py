@@ -62,7 +62,7 @@ def _build_sap_payload(reimbursement):
     credit_line = {
         "DebitCreditCode": "2",
         "ProfitCentreID": profit_centre,
-        "ChartOfAccountsItemCode": DEFAULT_BANK_GL_CODE,
+        "ChartOfAccountsItemCode": "212003",
         "TransactionCurrencyAmount": {
             "_value_1": float(reimbursement.total_amount),
             "currencyCode": CURRENCY_CODE,
