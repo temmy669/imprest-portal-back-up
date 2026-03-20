@@ -21,7 +21,7 @@ class BankView(APIView):
         #search banks
         search_query = request.query_params.get('search', None)
         if search_query:
-            banks = banks.filter(name__icontains=search_query)
+            banks = banks.filter(bank_name__icontains=search_query)
             
         #paginate results
         paginator = DynamicPageSizePagination()
