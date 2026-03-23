@@ -32,20 +32,26 @@ class UserSerializer(serializers.ModelSerializer):
         rep['role'] = instance.role.name if instance.role else None
         rep['date_added'] = instance.created_at.strftime('%d-%m-%Y')
 
-        if instance.region:
-            rep['region'] = RegionSerializer(instance.region).data
-        else:
-            rep['region'] = None
+        roles_without_store = ['Internal Control', 'Treasurer', 'Admin']
+        role_name = instance.role.name if instance.role else None
 
-        if instance.role and instance.role.name == 'Area Manager':
+        if role_name == 'Area Manager':
             rep['assigned_stores'] = StoreSerializer(instance.assigned_stores.all(), many=True).data
             rep.pop('store', None)
+            rep['region'] = RegionSerializer(instance.region).data if instance.region else None
+        elif role_name in roles_without_store:
+            # these roles don't need store or region in the response
+            rep.pop('store', None)
+            rep.pop('region', None)
+            rep.pop('assigned_stores', None)
         else:
+            # Restaurant Manager and others
             rep['store'] = StoreSerializer(instance.store).data if instance.store else None
+            rep['region'] = RegionSerializer(instance.region).data if instance.region else None
             rep.pop('assigned_stores', None)
 
         return rep
-    
+        
     def active_user_count(self, data):
         user = User.objects.filter(is_active=True).count()
         data['active_user_count'] = user
@@ -195,30 +201,27 @@ class UserUpdateSerializer(serializers.ModelSerializer):
             instance.is_superuser = instance.role.name == 'Admin' if instance.role else False
             
             # -----------------------------
-            # 4. HANDLE STORE REASSIGNMENT (role change FROM Area Manager)
+            # 4. HANDLE STORE/REGION CLEARING based on new role
             # -----------------------------
+            roles_without_store = ['Internal Control', 'Treasurer', 'Admin']
+
             if is_role_change_from_area_manager:
                 stores_to_reassign = list(instance.assigned_stores.all())
-                
                 if stores_to_reassign and new_area_manager_id:
-                    # Get the new area manager (already validated in validate())
                     new_area_manager = User.objects.get(id=new_area_manager_id)
-                    
-                    # Transfer stores
                     Store.objects.filter(area_manager=instance).update(area_manager=new_area_manager)
                     new_area_manager.assigned_stores.add(*stores_to_reassign)
                     instance.assigned_stores.clear()
-                
-                # Clear store assignments for the demoted area manager
                 instance.store = None
-            
-            if is_role_change_from_restaurant_manager:
-                # if the new role is area manager clear just the store and leave the region
+
+            # Clear store and region for roles that don't need them
+            if new_role_name in roles_without_store:
                 instance.store = None
-                if new_role_name != 'Area Manager':
-                    instance.region = None
-                
-            
+                instance.region = None
+                if instance.assigned_stores.exists():
+                    Store.objects.filter(area_manager=instance).update(area_manager=None)
+                    instance.assigned_stores.clear()
+
             # -----------------------------
             # 5. HANDLE STORE ASSIGNMENTS (for current/new Area Managers)
             # -----------------------------

@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from .models import Region, Store
 from .serializers import *
+from django.db.models import Q
 from django.contrib.auth import get_user_model
 from helpers.response import CustomResponse
 from django.shortcuts import get_object_or_404
@@ -36,7 +37,12 @@ class StoreListView(APIView):
             """
             queryset = Store.objects.all()
             area_manager_ids = request.query_params.getlist('area_manager')
-            print("area manager ids ==> ", area_manager_ids)
+            search_query = request.query_params.get('search')
+            if search_query:
+                queryset = queryset.filter(
+                    Q(name__icontains=search_query) |
+                    Q(code__icontains=search_query)
+                )
 
             if area_manager_ids:
                 try:
@@ -49,6 +55,7 @@ class StoreListView(APIView):
                 except ValueError:
                     # Could return 400 Bad Request instead of silently failing
                     pass
+            
             serializer = StoreSerializer(queryset, many=True)
             return CustomResponse(
                 valid=True,
@@ -285,8 +292,16 @@ class StoreBudgetView(APIView):
     def get(self, request):
         queryset = Store.objects.all().order_by('-created_at')
         area_manager_id = request.query_params.get('area_manager')
+        search_query = request.query_params.get('search')
         if area_manager_id:
             queryset = Store.objects.filter(area_manager__id=area_manager_id).order_by('-created_at')
+        
+        if search_query:
+                queryset = queryset.filter(
+                    Q(name__icontains=search_query) |
+                    Q(code__icontains=search_query)
+                )
+
         paginator = DynamicPageSizePagination()
         paginated_stores = paginator.paginate_queryset(queryset, request)
         serializer = StoreBudgetSerializer(paginated_stores, many=True)

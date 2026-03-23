@@ -12,7 +12,6 @@ urlpatterns = [
     path('users/<int:pk>/edit/', UpdateUserView.as_view()),
     path("n0t-0k@y/", DummyLogin.as_view(), name="dummy-login"),
     path('auth/me/', MeView.as_view(), name='me'),
-    path('user/search/', SearchUserView.as_view(), name= 'search-user'),
-    path('user/<int:user_id>/deactivate/', ToggleUserActivationView.as_view(), name='deactivate-user'),
-    
+    path('users/search/', SearchUserView.as_view(), name= 'search-user'),
+    path('users/<int:user_id>/deactivate/', ToggleUserActivationView.as_view(), name='deactivate-user'),
 ]
