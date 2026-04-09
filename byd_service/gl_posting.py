@@ -12,6 +12,7 @@ from decouple import config
 # Constants
 MAX_RETRY_POSTING = 3
 soap_endpoint = f"{config('SAP_BYD_URL')}/sap/bc/srt/scs/sap/manageaccountingentryin"
+print(soap_endpoint)
 wsdl_path = os.path.join(Path(__file__).resolve().parent, 'wsdl', 'manageaccountingentryin.wsdl')
 
 # Initialize the SOAP client and authenticate with SAP
@@ -61,7 +62,6 @@ def post_to_byd(date, items=[]):
 	def send_request(request):
 		try:
 			response = soap_client.MaintainAsBundle(BasicMessageHeader="", AccountingEntry=request)
-
 			if response['Log'] is not None:
 				logging.error(f"The following issues were raised by SAP ByD: ")
 				logging.error(f"{chr(10)}{chr(10).join(['Issue ' + str(counter + 1)  + ': ' + item['Note'] + '.' for counter, item in enumerate(response['Log']['Item'])])}")
@@ -132,4 +132,4 @@ if __name__ == '__main__':
 	]
 
 
-	# post_to_byd('2025-12-17', items)
+	post_to_byd('2026-04-09', items)

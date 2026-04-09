@@ -70,7 +70,6 @@ class AzureLoginView(APIView):
             f"code_challenge={challenge}&code_challenge_method=S256&"
             f"state={state}"
         )
-
         return Response({'authorization_url': authorization_url})
 
 
