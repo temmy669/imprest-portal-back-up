@@ -116,7 +116,7 @@ if __name__ == '__main__':
 			"ProfitCentreID": "4100005-4",
 			"ChartOfAccountsItemCode": "625003", 
 			"TransactionCurrencyAmount": {
-			"_value_1": 200.00,
+			"_value_1": 100.00,
 			"currencyCode": "NGN"
 			}
 		},
@@ -132,4 +132,4 @@ if __name__ == '__main__':
 	]
 
 
-	post_to_byd('2026-04-09', items)
+	post_to_byd('2026-03-12', items)

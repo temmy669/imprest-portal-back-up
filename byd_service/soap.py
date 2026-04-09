@@ -29,7 +29,7 @@ class SOAPServices:
 		self.client = client	
 	
 	def _sap_authentication(self, ):
-		# Return the authenticat	ion class
+		# Return the authentication class
 		return SAPAuthentication(
 			username=config('SAP_COMM_USER'),
 			password=config('SAP_COMM_PASS')

@@ -39,58 +39,61 @@ class PurchaseRequestView(APIView):
         return [IsAuthenticated()]
 
     def get(self, request):
-        """
-        List purchase requests (filtered by user's role)
-        """
         user = request.user
-        print(user)
         queryset = PurchaseRequest.objects.all().order_by('-created_at')
 
-        # Restaurant Managers only see requests from their own stores
+        # Role-based access
         if user.role.name == 'Restaurant Manager':
-            queryset = queryset.filter(store_id = user.store_id)
-            
-        # Area Managers see requests from their stores
+            queryset = queryset.filter(store_id=user.store_id)
         elif user.role.name == 'Area Manager':
             queryset = queryset.filter(store__in=user.assigned_stores.all())
-            
-        # Paginate the queryset
-        paginator = DynamicPageSizePagination()
-        paginated_queryset = paginator.paginate_queryset(queryset, request)
-        
-        # Calculate status counts
-        status_list = [obj.status for obj in (queryset or [])]
-            
+
+        # Parse filters
         status = request.query_params.get("status")
-        
+        search_query = request.query_params.get("q", "").strip()
+
+        # Validate search_query before anything else
+        if search_query and not search_query.upper().startswith("PR-"):
+            return CustomResponse(False, "Only PR-XXXX search is supported in 'q'", 400)
+
+        def apply_common_filters(qs):
+            if search_query:
+                try:
+                    request_id = int(search_query.upper().replace("PR-", ""))
+                    qs = qs.filter(id=request_id)
+                except ValueError:
+                    pass
+            return qs
+
+        # count_queryset — all filters except status
+        count_queryset = apply_common_filters(queryset)
+
+        # results queryset — all filters including status
+        queryset = apply_common_filters(queryset)
         if status:
             queryset = queryset.filter(status__iexact=status)
-            paginated_queryset = paginator.paginate_queryset(queryset, request)
-            
-    
-        
-        # print(status_list)
-        status_count_dict = dict(Counter(status_list))
-        
-        # #return empty status count if queryset is empty after filters
-        # if not queryset.exists():
-        #     status_count_dict = {}
-            
 
-        # Serialize paginated data
+        # Status counts — database aggregation, not Python iteration
+        status_counts = (
+            count_queryset
+            .values('status')
+            .annotate(count=Count('status'))
+            .order_by()
+        )
+        status_count_dict = {item['status']: item['count'] for item in status_counts}
+
+        # Single paginator call on the final queryset
+        paginator = DynamicPageSizePagination()
+        paginated_queryset = paginator.paginate_queryset(queryset, request)
         serializer = PurchaseRequestSerializer(paginated_queryset, many=True)
 
-        # Build custom response data
-        response_data = {
-            "count": paginator.page.paginator.count,  # total count (all pages)
+        return CustomResponse(True, "Filtered purchase requests retrieved", 200, {
+            "count": paginator.page.paginator.count,
             "next": paginator.get_next_link(),
             "previous": paginator.get_previous_link(),
             "results": serializer.data,
-            "status_counts": status_count_dict,       
-        }
-
-        return CustomResponse(True, "Filtered purchase requests retrieved", 200, response_data)
-
+            "status_counts": status_count_dict,
+        })
 
     def post(self, request):
         """
@@ -209,7 +212,7 @@ class ApprovePurchaseRequestView(APIView):
             # Fetch and lock all related items
             items = list(pr.items.select_for_update())
 
-            # ❌ If any item is declined → PR cannot be approved
+            # If any item is declined → PR cannot be approved
             if any(item.status == "declined" for item in items):
                 return CustomResponse(
                     False,
@@ -426,9 +429,13 @@ class SearchPurchaseRequestView(APIView):
             return CustomResponse(False, "Only PR-XXXX search is supported", 400)
 
 
-        # Status counts for paginated results only
-        status_list = [obj.status for obj in (queryset or [])]
-        status_count_dict = dict(Counter(status_list))
+        status_counts = (
+            queryset
+            .values('status')
+            .annotate(count=Count('status'))
+            .order_by()
+        )
+        status_count_dict = {item['status']: item['count'] for item in status_counts}
 
         # Serialize paginated data
         serializer = PurchaseRequestSerializer(paginated_queryset, many=True)
@@ -481,9 +488,13 @@ class DateRangeFilterView(APIView):
         paginator = DynamicPageSizePagination()
         paginated_queryset = paginator.paginate_queryset(queryset, request)
 
-        # Status counts for paginated results only
-        status_list = [obj.status for obj in (queryset or [])]
-        status_count_dict = dict(Counter(status_list))
+        status_counts = (
+            queryset
+            .values('status')
+            .annotate(count=Count('status'))
+            .order_by()
+        )
+        status_count_dict = {item['status']: item['count'] for item in status_counts}
 
         # Serialize paginated data
         serializer = PurchaseRequestSerializer(paginated_queryset, many=True)
