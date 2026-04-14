@@ -45,7 +45,7 @@ class UserSerializer(serializers.ModelSerializer):
             rep.pop('store', None)
             rep["region"] ={
                 "id":1,
-                "name":"okota"
+                "name":"-"
             }
             rep.pop('assigned_stores', None)
         else:
