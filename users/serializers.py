@@ -32,6 +32,7 @@ class UserSerializer(serializers.ModelSerializer):
         rep['role'] = instance.role.name if instance.role else None
         rep['date_added'] = instance.created_at.strftime('%d-%m-%Y')
 
+       
         roles_without_store = ['Internal Control', 'Treasurer', 'Admin']
         role_name = instance.role.name if instance.role else None
 
@@ -42,7 +43,10 @@ class UserSerializer(serializers.ModelSerializer):
         elif role_name in roles_without_store:
             # these roles don't need store or region in the response
             rep.pop('store', None)
-            rep.pop('region', None)
+            rep["region"] ={
+                "id":1,
+                "name":"okota"
+            }
             rep.pop('assigned_stores', None)
         else:
             # Restaurant Manager and others
