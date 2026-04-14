@@ -42,7 +42,9 @@ class UserSerializer(serializers.ModelSerializer):
         elif role_name in roles_without_store:
             # these roles don't need store or region in the response
             rep.pop('store', None)
-            rep.pop('region', None)
+            rep["region"] = {
+                "name":"okota"
+            }
             rep.pop('assigned_stores', None)
         else:
             # Restaurant Manager and others
