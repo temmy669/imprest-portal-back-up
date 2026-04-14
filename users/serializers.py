@@ -34,16 +34,15 @@ class UserSerializer(serializers.ModelSerializer):
 
         roles_without_store = ['Internal Control', 'Treasurer', 'Admin']
         role_name = instance.role.name if instance.role else None
-
+        default_stores = Store.objects.all()[:5]
+        default_region = Region.objects.all()[:2]
         if role_name == 'Area Manager':
             rep['assigned_stores'] = StoreSerializer(instance.assigned_stores.all(), many=True).data
             rep.pop('store', None)
             rep['region'] = RegionSerializer(instance.region).data if instance.region else None
-        # elif role_name in roles_without_store:
-        #     # these roles don't need store or region in the response
-        #     rep.pop('store', None)
-        #     rep.pop('region', None)
-        #     rep.pop('assigned_stores', None)
+        elif role_name in roles_without_store:
+            # these roles don't need store or region in the response
+            rep['region'] = RegionSerializer(default_region).data if instance.region else None
         else:
             # Restaurant Manager and others
             rep['store'] = StoreSerializer(instance.store).data if instance.store else None
