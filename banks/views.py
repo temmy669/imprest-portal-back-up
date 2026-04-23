@@ -40,6 +40,14 @@ class BankView(APIView):
             serializer.save()
             return CustomResponse(True, "banks created successfully", 201, serializer.data)
         return CustomResponse(False, serializer.errors, 400)
+    
+    def delete(self, request, pk):
+        try:
+            bank = Bank.objects.get(pk=pk)
+            bank.delete()
+            return CustomResponse(True, "bank deleted successfully", 200, None)
+        except Bank.DoesNotExist:
+            return CustomResponse(False, "bank not found", 404, None)
 
 class AccountView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
