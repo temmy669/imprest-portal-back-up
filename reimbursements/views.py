@@ -341,6 +341,8 @@ class UploadReceiptView(APIView):
             upload_kwargs = {
                 "folder": "receipts/",
                 "resource_type": "raw" if is_pdf else "image",
+                "type": "upload",
+                "access_mode": "public",
             }
             result = cloudinary.uploader.upload(receipt_file, **upload_kwargs)
             receipt_url = result.get("secure_url")
