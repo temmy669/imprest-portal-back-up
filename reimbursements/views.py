@@ -37,7 +37,6 @@ from openpyxl.utils import get_column_letter
 import cloudinary
 import cloudinary.uploader
 import re
-from utils.receipt_validation import validate_receipt
 from django.db import transaction
 from utils.email_utils import send_reimbursement_rejection_notification, send_reimbursement_approval_notification
 from .post_to_byd import update_sap_record
@@ -271,6 +270,37 @@ class ReimbursementRequestView(APIView):
         return CustomResponse(False, serializer.errors, 400)
 
 
+def extract_cloudinary_public_id(url: str) -> str:
+    """
+    Extract Cloudinary public_id (with folder, without extension) from a secure URL.
+    
+    Examples:
+      https://res.cloudinary.com/<cloud>/image/upload/v123/receipts/myfile.jpg  → receipts/myfile
+      https://res.cloudinary.com/<cloud>/raw/upload/v123/receipts/myfile.pdf   → receipts/myfile
+    """
+    match = re.search(r'/upload/(?:v\d+/)?(.+?)(\.[^./]+)?$', url)
+    if match:
+        return match.group(1)
+    raise ValueError(f"Cannot extract public_id from Cloudinary URL: {url}")
+
+
+def destroy_cloudinary_asset(public_id: str) -> bool:
+    """
+    Attempt to delete a Cloudinary asset trying both image and raw resource types.
+    Returns True if deletion succeeded, False otherwise.
+    PDFs are uploaded as resource_type='raw' by Cloudinary even when using 'auto',
+    so we need to try both.
+    """
+    for resource_type in ("image", "raw"):
+        try:
+            result = cloudinary.uploader.destroy(public_id, resource_type=resource_type)
+            if result.get("result") == "ok":
+                return True
+        except Exception:
+            continue
+    return False
+
+
 class UploadReceiptView(APIView):
     parser_classes = [MultiPartParser, FormParser]
     authentication_classes = [JWTAuthenticationFromCookie]
@@ -281,6 +311,18 @@ class UploadReceiptView(APIView):
             return CustomResponse(False, "No receipt file provided.", 400)
         receipt_file = request.FILES['receipt']
 
+        # --- Allow images AND PDFs ---
+        ALLOWED_CONTENT_TYPES = [
+            "image/jpeg", "image/png", "image/jpg", "image/webp",
+            "application/pdf",
+        ]
+        if receipt_file.content_type not in ALLOWED_CONTENT_TYPES:
+            return CustomResponse(
+                False,
+                "Invalid file type. Only JPEG, PNG, WebP images and PDF files are accepted.",
+                400,
+            )
+
         item_id = request.data.get('item_id')
         if not item_id:
             return CustomResponse(False, "Item ID is required for validation.", 400)
@@ -289,68 +331,39 @@ class UploadReceiptView(APIView):
             item = PurchaseRequestItem.objects.get(id=item_id)
         except PurchaseRequestItem.DoesNotExist:
             return CustomResponse(False, "Invalid item ID.", 400)
-        
-        # Check if receipt already validated and uploaded
-        if item.receipt_validated:
-            return CustomResponse(
-                False, 
-                "Receipt has already been uploaded and validated for this item.", 
-                400,
-                {
-                    "receipt_no": item.receipt_no,
-                    "extracted_vendor": item.extracted_vendor
-                }
-            )
 
-        # Read the file content for validation
+
         receipt_data = receipt_file.read()
-        
-        # Validate the receipt BEFORE uploading
-        validation_result = validate_receipt(
-            receipt_data, 
-            item.total_price, 
-            item.request.created_at.date() if item.request.created_at else None
-        )
-
-        # # Check validation result BEFORE uploading
-        # if not validation_result['validated']:
-        #     return CustomResponse(
-        #         False, 
-        #         "Receipt validation failed.", 
-        #         400, 
-        #         {"validation_errors": validation_result['errors']}
-        #     )
-
-        # Only upload if validation passed
-        # Need to reset file pointer since we already read it
         receipt_file.seek(0)
-        
+        is_pdf = receipt_file.content_type == "application/pdf"
+
         if getattr(settings, "ENVIRONMENT", "development") == "production":
-            # Upload to Cloudinary
-            result = cloudinary.uploader.upload(receipt_file, folder="receipts/")
+            upload_kwargs = {
+                "folder": "receipts/",
+                "resource_type": "raw" if is_pdf else "image",
+            }
+            result = cloudinary.uploader.upload(receipt_file, **upload_kwargs)
             receipt_url = result.get("secure_url")
         else:
-            # Local storage
             fs = FileSystemStorage(location=os.path.join(settings.MEDIA_ROOT, 'receipts/'))
-            filename = fs.save(f"receipts/{receipt_file.name}", receipt_file)
-            receipt_url = fs.url(filename)
+            filename = fs.save(receipt_file.name, receipt_file)
+            receipt_url = request.build_absolute_uri(settings.MEDIA_URL + 'receipts/' + filename)
 
-        # Save validation data to item (only reached if validation passed)
+        was_replacement = item.receipt_validated  # capture state BEFORE updating
+
+        # Persist the upload — extraction is disabled for now but
+        # we still need to mark the item as having a receipt.
         item.receipt_validated = True
-        item.receipt_no = validation_result.get('receipt_number')
-        item.extracted_amount = validation_result.get('extracted_amount')
-        item.extracted_date = validation_result.get('extracted_date')
-        item.extracted_vendor = validation_result.get('extracted_vendor')
         item.validation_errors = None
         item.save()
 
         return CustomResponse(
-            True, 
-            "Receipt uploaded and validated successfully.", 
-            200, 
+            True,
+            "Receipt replaced successfully." if was_replacement else "Receipt uploaded successfully.",
+            200,
             {"receipt_url": receipt_url}
         )
-    
+        
 class ApproveReimbursementView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]
     permission_classes = [IsAuthenticated, ApproveReimbursementRequest]
@@ -385,17 +398,14 @@ class ApproveReimbursementView(APIView):
             reimbursement.updated_by = request.user
             reimbursement.save(user=request.user)
 
-            # send_reimbursement_approval_notification(
-            #     reimbursement,
-            #     request.user
-            # )
+            # Send notification to requester (AM) or Internal Control (IC)
+            send_reimbursement_approval_notification(reimbursement, request.user)
 
             return CustomResponse(
                 True,
                 f"Reimbursement approved by {role} successfully",
                 200
             )
-
 
 class ApproveReimbursementItemView(APIView):
     authentication_classes = [JWTAuthenticationFromCookie]

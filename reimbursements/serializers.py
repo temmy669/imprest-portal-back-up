@@ -6,7 +6,6 @@ from .models import (
 )
 from purchases.models import LimitConfig
 from decimal import Decimal
-from utils.receipt_validation import validate_receipt
 from django.utils import timezone
 from django.db.models import Sum
 from rest_framework.exceptions import ValidationError
@@ -101,14 +100,22 @@ class ReimbursementSerializer(serializers.ModelSerializer):
     comments = ReimbursementCommentSerializer(many=True, required=False)
     requester = serializers.StringRelatedField(read_only=True)
     balance = serializers.SerializerMethodField()
+    #diaplay store budget
+    store_budget = serializers.SerializerMethodField()
+
+    def get_store_budget(self, instance):
+        store = instance.store
+        if store and store.budget is not None:
+            return f"₦{store.budget:,.2f}"
+        return None
 
     class Meta:
         model = Reimbursement
         fields = [
             'id', 'status', 'items', 'comments', 'requester',
-            'internal_control_status', 'store', 'disbursement_status', 'bank', 'account', 'balance', 'voucher_id'
+            'internal_control_status', 'store', 'disbursement_status', 'bank', 'account', 'balance', 'voucher_id', 'store_budget'
         ]
-        read_only_fields = ['requester', 'disbursement_status', 'balance']
+        read_only_fields = ['requester', 'disbursement_status', 'balance', 'store_budget']
         
     def validate(self, attrs):
 

@@ -39,5 +39,3 @@ urlpatterns = [
     path('reimbursements/bulk-disburse/', BulkDisbursementView.as_view(), name='bulk-disburse-reimbursements'),
 ]
 
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
