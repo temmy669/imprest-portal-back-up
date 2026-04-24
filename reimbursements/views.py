@@ -270,36 +270,6 @@ class ReimbursementRequestView(APIView):
         return CustomResponse(False, serializer.errors, 400)
 
 
-def extract_cloudinary_public_id(url: str) -> str:
-    """
-    Extract Cloudinary public_id (with folder, without extension) from a secure URL.
-    
-    Examples:
-      https://res.cloudinary.com/<cloud>/image/upload/v123/receipts/myfile.jpg  → receipts/myfile
-      https://res.cloudinary.com/<cloud>/raw/upload/v123/receipts/myfile.pdf   → receipts/myfile
-    """
-    match = re.search(r'/upload/(?:v\d+/)?(.+?)(\.[^./]+)?$', url)
-    if match:
-        return match.group(1)
-    raise ValueError(f"Cannot extract public_id from Cloudinary URL: {url}")
-
-
-def destroy_cloudinary_asset(public_id: str) -> bool:
-    """
-    Attempt to delete a Cloudinary asset trying both image and raw resource types.
-    Returns True if deletion succeeded, False otherwise.
-    PDFs are uploaded as resource_type='raw' by Cloudinary even when using 'auto',
-    so we need to try both.
-    """
-    for resource_type in ("image", "raw"):
-        try:
-            result = cloudinary.uploader.destroy(public_id, resource_type=resource_type)
-            if result.get("result") == "ok":
-                return True
-        except Exception:
-            continue
-    return False
-
 
 class UploadReceiptView(APIView):
     parser_classes = [MultiPartParser, FormParser]
