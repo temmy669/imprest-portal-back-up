@@ -3,6 +3,7 @@ from .views import BankView, AccountView, AccountListByBankView, BankListView, L
 
 urlpatterns = [
     path('', BankView.as_view(), name='bank-list'),
+    path('<str:pk>/', BankView.as_view(), name='bank-detail'),
     path('list-banks/', BankListView.as_view(), name='bank-names-list'),
     path('byd/', ListBanksView.as_view(), name='list-banks-byd'),
     path('accounts/', AccountView.as_view(), name='account-list'),
