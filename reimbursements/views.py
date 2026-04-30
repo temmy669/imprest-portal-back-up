@@ -780,8 +780,8 @@ class ExportReimbursement(APIView):
             "Store Code",
             "Store Manager",
             "Expense Item",
-            "Amount"
-            "Status"
+            "Amount",
+            "Status",
             "Date Created"
         ]
 
